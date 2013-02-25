@@ -52,6 +52,8 @@
 #include "utils/snapmgr.h"
 #include "utils/tqual.h"
 
+/* Hook for plugins to get control in snapshot acquisition */
+snapshot_hook_type snapshot_hook = NULL;
 
 /*
  * CurrentSnapshot points to the only snapshot taken in transaction-snapshot
@@ -147,6 +149,10 @@ static void SnapshotResetXmin(void);
 Snapshot
 GetTransactionSnapshot(void)
 {
+	/* Check presence of hook for snapshot */
+	if (snapshot_hook)
+		return (*snapshot_hook) ();
+
 	/* First call in transaction? */
 	if (!FirstSnapshotSet)
 	{

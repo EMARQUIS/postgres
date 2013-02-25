@@ -24,6 +24,9 @@
 #include "storage/proc.h"
 #include "utils/syscache.h"
 
+/* Hook for plugins to get control in transaction ID acquisition */
+transaction_id_hook_type transaction_id_hook = NULL;
+
 
 /* Number of OIDs to prefetch (preallocate) per XLOG write */
 #define VAR_OID_PREFETCH		8192
@@ -46,6 +49,10 @@ TransactionId
 GetNewTransactionId(bool isSubXact)
 {
 	TransactionId xid;
+
+	/* Check presence of hook for transaction ID */
+	if (transaction_id_hook)
+		return (*transaction_id_hook) (isSubXact);
 
 	/*
 	 * During bootstrap initialization, we return the special bootstrap

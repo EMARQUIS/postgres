@@ -17,6 +17,9 @@
 #include "utils/resowner.h"
 #include "utils/snapshot.h"
 
+/* Hook for plugins to get control in GetTransactionSnapshot() */
+typedef Snapshot (*snapshot_hook_type) (void);
+extern PGDLLIMPORT snapshot_hook_type snapshot_hook;
 
 extern bool FirstSnapshotSet;
 

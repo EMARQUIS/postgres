@@ -1541,6 +1541,7 @@ SlruSharedData
 Snapshot
 SnapshotData
 SnapshotSatisfiesFunc
+snapshot_hook_type
 SockAddr
 Sort
 SortBy
@@ -1694,6 +1695,7 @@ TransactionState
 TransactionStateData
 TransactionStmt
 TransactionStmtKind
+transaction_id_hook_type
 Trigger
 TriggerData
 TriggerDesc

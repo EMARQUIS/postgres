@@ -16,6 +16,10 @@
 
 #include "access/xlogdefs.h"
 
+/* Hook for plugins to get control in GetNewTransactionId() */
+typedef TransactionId (*transaction_id_hook_type) (bool isSubXact);
+extern PGDLLIMPORT transaction_id_hook_type transaction_id_hook;
+
 
 /* ----------------
  *		Special transaction ID values
