@@ -60,7 +60,28 @@ extern Oid index_create(Relation heapRelation,
 			 bool allow_system_table_mods,
 			 bool skip_build,
 			 bool concurrent,
-			 bool is_internal);
+			 bool is_internal,
+			 bool is_reindex);
+
+extern Oid index_concurrent_create(Relation heapRelation,
+								   Oid indOid,
+								   char *concurrentName);
+
+extern void index_concurrent_build(Oid heapOid,
+								   Oid indexOid,
+								   bool isprimary);
+
+extern void index_concurrent_swap(Oid newIndexOid, Oid oldIndexOid);
+
+extern void index_concurrent_set_dead(Oid indexId,
+									  Oid heapId,
+									  LOCKTAG locktag);
+
+extern void index_concurrent_clear_valid(Relation heapRelation,
+										 Oid indexOid,
+										 bool concurrent);
+
+extern void index_concurrent_drop(Oid indexOid);
 
 extern void index_constraint_create(Relation heapRelation,
 						Oid indexRelationId,
@@ -100,7 +121,9 @@ extern double IndexBuildHeapScan(Relation heapRelation,
 
 extern void validate_index(Oid heapId, Oid indexId, Snapshot snapshot);
 
-extern void index_set_state_flags(Oid indexId, IndexStateFlagsAction action);
+extern void index_set_state_flags(Oid indexId,
+								  IndexStateFlagsAction action,
+								  bool concurrent);
 
 extern void reindex_index(Oid indexId, bool skip_constraint_checks);
 
