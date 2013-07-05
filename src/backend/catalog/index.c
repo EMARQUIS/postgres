@@ -1330,10 +1330,8 @@ index_concurrent_build(Oid heapOid,
  * Swap old index and new index in a concurrent context. For the time being
  * what is done here is switching the relation relfilenode of the indexes. If
  * extra operations are necessary during a concurrent swap, processing should
- * be added here. AccessExclusiveLock is taken on the index relations that are
- * swapped until the end of the transaction where this function is called.
- * Note: a lower lock could be taken if catalog cache with SnapshotNow was
- * correctly MVCC'd.
+ * be added here. Relations do not require an exclusive lock thanks to the
+ * MVCC catalog access to relcache.
  */
 void
 index_concurrent_swap(Oid newIndexOid, Oid oldIndexOid)
@@ -1344,10 +1342,10 @@ index_concurrent_swap(Oid newIndexOid, Oid oldIndexOid)
 	Oid				tmpnode;
 
 	/*
-	 * Take an exclusive lock on the old and new index before swapping them.
+	 * Take a necessary lock on the old and new index before swapping them.
 	 */
-	oldIndexRel = relation_open(oldIndexOid, AccessExclusiveLock);
-	newIndexRel = relation_open(newIndexOid, AccessExclusiveLock);
+	oldIndexRel = relation_open(oldIndexOid, ShareUpdateExclusiveLock);
+	newIndexRel = relation_open(newIndexOid, ShareUpdateExclusiveLock);
 
 	/* Now swap relfilenode of those indexes */
 	pg_class = heap_open(RelationRelationId, RowExclusiveLock);
@@ -1363,7 +1361,7 @@ index_concurrent_swap(Oid newIndexOid, Oid oldIndexOid)
 	oldIndexForm = (Form_pg_class) GETSTRUCT(oldIndexTuple);
 	newIndexForm = (Form_pg_class) GETSTRUCT(newIndexTuple);
 
-	/* Here is where the actual swapping happens */
+	/* Here is where the actual swap happens */
 	tmpnode = oldIndexForm->relfilenode;
 	oldIndexForm->relfilenode = newIndexForm->relfilenode;
 	newIndexForm->relfilenode = tmpnode;

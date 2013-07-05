@@ -1161,11 +1161,14 @@ ReindexRelationConcurrently(Oid relationOid)
 	/*
 	 * Phase 4 of REINDEX CONCURRENTLY
 	 *
-	 * Now that the concurrent indexes are valid and can be used, we need to
-	 * swap each concurrent index with its corresponding old index. The
-	 * concurrent index is marked as valid before performing the swap, and
-	 * is invalidated once the swap is done, making it not usable by other
-	 * backends once its associated transaction is committed.
+	 * Now that the concurrent indexes have been validated could be used,
+	 * we need to swap each concurrent index with its corresponding old index.
+	 * Note that the concurrent index used for swaping is not marked as valid
+	 * because we need to keep the former index and the concurrent index with
+	 * a different valid status to avoid an implosion in the number of indexes
+	 * a parent relation could have if this operation fails multiple times in
+	 * a row due to a reason or another. Note that we already know thanks to
+	 * validation step that
 	 */
 
 	/* Swap the indexes and mark the indexes that have the old data as invalid */
@@ -1173,7 +1176,7 @@ ReindexRelationConcurrently(Oid relationOid)
 	{
 		Oid			indOid = lfirst_oid(lc);
 		Oid			concurrentOid = lfirst_oid(lc2);
-		Relation	indexRel, indexParentRel;
+		Relation	indexParentRel;
 
 		/* Check for any process interruption */
 		CHECK_FOR_INTERRUPTS();
@@ -1190,26 +1193,11 @@ ReindexRelationConcurrently(Oid relationOid)
 		 * to reduce likelihood of deadlock as ShareUpdateExclusiveLock is
 		 * already taken within session.
 		 */
-		indexRel = index_open(indOid, AccessExclusiveLock);
 		indexParentRel = heap_open(indexRel->rd_index->indrelid,
-								   AccessExclusiveLock);
-
-		/*
-		 * Concurrent index can now be marked as valid before performing
-		 * the swap. Note here that as an exclusive lock is taken on the
-		 * relations involved it is safer to call this function as it would
-		 * be for a non-concurrent context.
-		 * Note: With MVCC catalog access, a lower lock would be enough.
-		 */
-		index_set_state_flags(concurrentOid, INDEX_CREATE_SET_VALID);
+								   RowExclusiveLock);
 
 		/* Swap old index and its concurrent */
 		index_concurrent_swap(concurrentOid, indOid);
-
-		/*
-		 * Now mark the old index as invalid, the swap is done.
-		 */
-		index_concurrent_clear_valid(indexParentRel, concurrentOid);
 
 		/*
 		 * Invalidate the relcache for the table, so that after this commit
@@ -1218,9 +1206,19 @@ ReindexRelationConcurrently(Oid relationOid)
 		 */
 		CacheInvalidateRelcache(indexParentRel);
 
-		/* Close relations opened previously for cache invalidation */
-		index_close(indexRel, NoLock);
+		/* Close relation opened previously for cache invalidation */
 		heap_close(indexParentRel, NoLock);
+
+		/* We need the xmin limit to wait for older snapshots. */
+		snapshot = GetTransactionSnapshot();
+		limitXmin = snapshot->xmin;
+		PopActiveSnapshot();
+
+		/*
+		 * We need to wait for transactions that might need the older index
+		 * information before swap before committing.
+		 */
+		WaitForOldSnapshots(limitXmin);
 
 		/* Commit this transaction and make old index invalidation visible */
 		CommitTransactionCommand();
