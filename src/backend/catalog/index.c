@@ -1295,8 +1295,7 @@ index_concurrent_build(Oid heapOid,
 					   Oid indexOid,
 					   bool isprimary)
 {
-	Relation	rel,
-				indexRelation;
+	Relation	rel, indexRelation;
 	IndexInfo  *indexInfo;
 
 	/* Open and lock the parent heap relation */
@@ -1392,8 +1391,7 @@ index_concurrent_swap(Oid newIndexOid, Oid oldIndexOid)
 void
 index_concurrent_set_dead(Oid heapOid, Oid indexOid, LOCKTAG locktag)
 {
-	Relation	heapRelation;
-	Relation	indexRelation;
+	Relation	heapRelation, indexRelation;
 
 	/*
 	 * Now we must wait until no running transaction could be using the
@@ -1419,7 +1417,7 @@ index_concurrent_set_dead(Oid heapOid, Oid indexOid, LOCKTAG locktag)
 
 	/*
 	 * Now we are sure that nobody uses the index for queries; they just
-	 * might have it open for updating it.	So now we can unset indisready
+	 * might have it open for updating it.  So now we can unset indisready
 	 * and indislive, then wait till nobody could be using it at all
 	 * anymore.
 	 */

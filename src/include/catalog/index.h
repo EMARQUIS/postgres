@@ -73,8 +73,8 @@ extern void index_concurrent_build(Oid heapOid,
 
 extern void index_concurrent_swap(Oid newIndexOid, Oid oldIndexOid);
 
-extern void index_concurrent_set_dead(Oid indexId,
-									  Oid heapId,
+extern void index_concurrent_set_dead(Oid heapOid,
+									  Oid indexOid,
 									  LOCKTAG locktag);
 
 extern void index_concurrent_drop(Oid indexOid);
