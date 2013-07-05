@@ -2573,7 +2573,7 @@ XidCacheRemoveRunningXids(TransactionId xid,
  *
  * Wait until no transactions hold the relation related to lock those locks.
  * To do this, inquire which xacts currently would conflict with each lock on
- * the table referred by the respective LOCKTAG -- ie, which ones have a lock
+ * the table referred by the respective LOCKMODE -- ie, which ones have a lock
  * that permits writing the relation. Then wait for each of these xacts to
  * commit or abort.
  *
