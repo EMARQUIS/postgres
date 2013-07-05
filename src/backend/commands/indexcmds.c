@@ -311,7 +311,6 @@ DefineIndex(IndexStmt *stmt,
 	Oid			tablespaceId;
 	List	   *indexColNames;
 	Relation	rel;
-	Relation	indexRelation;
 	HeapTuple	tuple;
 	Form_pg_am	accessMethodForm;
 	bool		amcanorder;
@@ -678,27 +677,13 @@ DefineIndex(IndexStmt *stmt,
 	 * HOT-chain or the extension of the chain is HOT-safe for this index.
 	 */
 
-	/* Open and lock the parent heap relation */
-	rel = heap_openrv(stmt->relation, ShareUpdateExclusiveLock);
-
-	/* And the target index relation */
-	indexRelation = index_open(indexRelationId, RowExclusiveLock);
-
 	/* Set ActiveSnapshot since functions in the indexes may need it */
 	PushActiveSnapshot(GetTransactionSnapshot());
 
-	/* We have to re-build the IndexInfo struct, since it was lost in commit */
-	indexInfo = BuildIndexInfo(indexRelation);
-	Assert(!indexInfo->ii_ReadyForInserts);
-	indexInfo->ii_Concurrent = true;
-	indexInfo->ii_BrokenHotChain = false;
-
-	/* Now build the index */
-	index_build(rel, indexRelation, indexInfo, stmt->primary, false);
-
-	/* Close both the relations, but keep the locks */
-	heap_close(rel, NoLock);
-	index_close(indexRelation, NoLock);
+	/* Perform concurrent build of index */
+	index_concurrent_build(RangeVarGetRelid(stmt->relation, NoLock, false),
+						   indexRelationId,
+						   stmt->primary);
 
 	/*
 	 * Update the pg_index row to mark the index as ready for inserts. Once we
