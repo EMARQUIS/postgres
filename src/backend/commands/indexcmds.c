@@ -1176,7 +1176,7 @@ ReindexRelationConcurrently(Oid relationOid)
 	{
 		Oid			indOid = lfirst_oid(lc);
 		Oid			concurrentOid = lfirst_oid(lc2);
-		Relation	indexParentRel;
+		Oid			relOid;
 
 		/* Check for any process interruption */
 		CHECK_FOR_INTERRUPTS();
@@ -1187,15 +1187,6 @@ ReindexRelationConcurrently(Oid relationOid)
 		 */
 		StartTransactionCommand();
 
-		/*
-		 * Mark the cache of associated relation as invalid, open relation
-		 * relations. AccessExclusive Lock is taken here and not a lower lock
-		 * to reduce likelihood of deadlock as ShareUpdateExclusiveLock is
-		 * already taken within session.
-		 */
-		indexParentRel = heap_open(indexRel->rd_index->indrelid,
-								   RowExclusiveLock);
-
 		/* Swap old index and its concurrent */
 		index_concurrent_swap(concurrentOid, indOid);
 
@@ -1204,10 +1195,8 @@ ReindexRelationConcurrently(Oid relationOid)
 		 * all sessions will refresh any cached plans that might reference the
 		 * index.
 		 */
-		CacheInvalidateRelcache(indexParentRel);
-
-		/* Close relation opened previously for cache invalidation */
-		heap_close(indexParentRel, NoLock);
+		relOid = IndexGetRelation(indOid, false);
+		CacheInvalidateRelcacheByRelid(relOid);
 
 		/* We need the xmin limit to wait for older snapshots. */
 		snapshot = GetTransactionSnapshot();
