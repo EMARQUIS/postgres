@@ -3339,21 +3339,20 @@ validate_index_heapscan(Relation heapRelation,
  * index_set_state_flags - adjust pg_index state flags
  *
  * This is used during CREATE/DROP INDEX CONCURRENTLY to adjust the pg_index
- * flags that denote the index's state.  If this function is called in a
- * concurrent process, we use an in-place update of the pg_index tuple,
- * because we do not have exclusive lock on the parent table and so other
- * sessions might concurrently be doing SnapshotNow scans of pg_index to
- * identify the table's indexes.  A transactional update would risk somebody
- * not seeing the index at all.  Because the update is not transactional
- * and will not roll back on error, this must only be used as the last step
- * in a transaction that has not made any transactional catalog updates!
+ * flags that denote the index's state.  We must use an in-place update of
+ * the pg_index tuple, because we do not have exclusive lock on the parent
+ * table and so other sessions might concurrently be doing SnapshotNow scans
+ * of pg_index to identify the table's indexes.  A transactional update would
+ * risk somebody not seeing the index at all.  Because the update is not
+ * transactional and will not roll back on error, this must only be used as
+ * the last step in a transaction that has not made any transactional catalog
+ * updates!
  *
  * Note that heap_inplace_update does send a cache inval message for the
  * tuple, so other sessions will hear about the update as soon as we commit.
  */
 void
-index_set_state_flags(Oid indexId,
-					  IndexStateFlagsAction action)
+index_set_state_flags(Oid indexId, IndexStateFlagsAction action)
 {
 	Relation	pg_index;
 	HeapTuple	indexTuple;

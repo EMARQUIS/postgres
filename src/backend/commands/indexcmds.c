@@ -649,10 +649,7 @@ DefineIndex(IndexStmt *stmt,
 	 * for an overview of how this works)
 	 *
 	 * Now we must wait until no running transaction could have the table open
-	 * with the old list of indexes.  To do this, inquire which xacts
-	 * currently would conflict with ShareLock on the table -- ie, which ones
-	 * have a lock that permits writing the table.	Then wait for each of
-	 * these xacts to commit or abort.	Note we do not need to worry about
+	 * with the old list of indexes. Note we do not need to worry about
 	 * xacts that open the table for writing after this point; they will see
 	 * the new index when they open it.
 	 *
