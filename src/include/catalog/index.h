@@ -78,8 +78,7 @@ extern void index_concurrent_set_dead(Oid indexId,
 									  LOCKTAG locktag);
 
 extern void index_concurrent_clear_valid(Relation heapRelation,
-										 Oid indexOid,
-										 bool concurrent);
+										 Oid indexOid);
 
 extern void index_concurrent_drop(Oid indexOid);
 
@@ -121,9 +120,7 @@ extern double IndexBuildHeapScan(Relation heapRelation,
 
 extern void validate_index(Oid heapId, Oid indexId, Snapshot snapshot);
 
-extern void index_set_state_flags(Oid indexId,
-								  IndexStateFlagsAction action,
-								  bool concurrent);
+extern void index_set_state_flags(Oid indexId, IndexStateFlagsAction action);
 
 extern void reindex_index(Oid indexId, bool skip_constraint_checks);
 

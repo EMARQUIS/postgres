@@ -695,7 +695,7 @@ DefineIndex(IndexStmt *stmt,
 	 * commit this transaction, any new transactions that open the table must
 	 * insert new entries into the index for insertions and non-HOT updates.
 	 */
-	index_set_state_flags(indexRelationId, INDEX_CREATE_SET_READY, true);
+	index_set_state_flags(indexRelationId, INDEX_CREATE_SET_READY);
 
 	/* we can do away with our snapshot */
 	PopActiveSnapshot();
@@ -760,7 +760,7 @@ DefineIndex(IndexStmt *stmt,
 	/*
 	 * Index can now be marked valid -- update its pg_index entry
 	 */
-	index_set_state_flags(indexRelationId, INDEX_CREATE_SET_VALID, true);
+	index_set_state_flags(indexRelationId, INDEX_CREATE_SET_VALID);
 
 	/*
 	 * The pg_index update will cause backends (including this one) to update
@@ -1078,7 +1078,7 @@ ReindexRelationConcurrently(Oid relationOid)
 		 * table must insert new entries into the index for insertions and
 		 * non-HOT updates.
 		 */
-		index_set_state_flags(concurrentOid, INDEX_CREATE_SET_READY, true);
+		index_set_state_flags(concurrentOid, INDEX_CREATE_SET_READY);
 
 		/* we can do away with our snapshot */
 		PopActiveSnapshot();
@@ -1201,7 +1201,7 @@ ReindexRelationConcurrently(Oid relationOid)
 		 * be for a non-concurrent context.
 		 * Note: With MVCC catalog access, a lower lock would be enough.
 		 */
-		index_set_state_flags(concurrentOid, INDEX_CREATE_SET_VALID, false);
+		index_set_state_flags(concurrentOid, INDEX_CREATE_SET_VALID);
 
 		/* Swap old index and its concurrent */
 		index_concurrent_swap(concurrentOid, indOid);
@@ -1209,7 +1209,7 @@ ReindexRelationConcurrently(Oid relationOid)
 		/*
 		 * Now mark the old index as invalid, the swap is done.
 		 */
-		index_concurrent_clear_valid(indexParentRel, concurrentOid, false);
+		index_concurrent_clear_valid(indexParentRel, concurrentOid);
 
 		/*
 		 * Invalidate the relcache for the table, so that after this commit

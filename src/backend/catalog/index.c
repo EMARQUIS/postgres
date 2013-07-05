@@ -1425,7 +1425,7 @@ index_concurrent_set_dead(Oid indexId, Oid heapId, LOCKTAG locktag)
 	 * and indislive, then wait till nobody could be using it at all
 	 * anymore.
 	 */
-	index_set_state_flags(indexId, INDEX_DROP_SET_DEAD, true);
+	index_set_state_flags(indexId, INDEX_DROP_SET_DEAD);
 
 	/*
 	 * Invalidate the relcache for the table, so that after this commit
@@ -1446,18 +1446,15 @@ index_concurrent_set_dead(Oid indexId, Oid heapId, LOCKTAG locktag)
  *
  * Release the valid state of a given index and then release the cache of
  * its parent relation. This function should be called when initializing an
- * index drop in a concurrent context before setting the index as dead if
- * if called in a concurrent context.
+ * index drop in a concurrent context before setting the index as dead.
  */
 void
-index_concurrent_clear_valid(Relation heapRelation,
-							 Oid indexOid,
-							 bool concurrent)
+index_concurrent_clear_valid(Relation heapRelation, Oid indexOid)
 {
 	/*
 	 * Mark index invalid by updating its pg_index entry
 	 */
-	index_set_state_flags(indexOid, INDEX_DROP_CLEAR_VALID, concurrent);
+	index_set_state_flags(indexOid, INDEX_DROP_CLEAR_VALID);
 
 	/*
 	 * Invalidate the relcache for the table, so that after this commit
@@ -1849,7 +1846,7 @@ index_drop(Oid indexId, bool concurrent)
 					 errmsg("DROP INDEX CONCURRENTLY must be first action in transaction")));
 
 		/* Mark the index as invalid */
-		index_concurrent_clear_valid(userHeapRelation, indexId, true);
+		index_concurrent_clear_valid(userHeapRelation, indexId);
 
 		/* save lockrelid and locktag for below, then close but keep locks */
 		heaprelid = userHeapRelation->rd_lockInfo.lockRelId;
@@ -3374,18 +3371,14 @@ validate_index_heapscan(Relation heapRelation,
  */
 void
 index_set_state_flags(Oid indexId,
-					  IndexStateFlagsAction action,
-					  bool concurrent)
+					  IndexStateFlagsAction action)
 {
 	Relation	pg_index;
 	HeapTuple	indexTuple;
 	Form_pg_index indexForm;
 
-	/*
-	 * Assert that current xact hasn't done any transactional updates, there
-	 * is nothing to worry in a non-concurrent context.
-	 */
-	Assert(!concurrent || GetTopTransactionIdIfAny() == InvalidTransactionId);
+	/* Assert that current xact hasn't done any transactional updates */
+	Assert(GetTopTransactionIdIfAny() == InvalidTransactionId);
 
 	/* Open pg_index and fetch a writable copy of the index's tuple */
 	pg_index = heap_open(IndexRelationId, RowExclusiveLock);
@@ -3445,20 +3438,8 @@ index_set_state_flags(Oid indexId,
 			break;
 	}
 
-	/*
-	 * Write it back in-place in a concurrent context, and do a simple update
-	 * for a non-concurrent context.
-	 */
-	if (concurrent)
-	{
-		heap_inplace_update(pg_index, indexTuple);
-	}
-	else
-	{
-		simple_heap_update(pg_index, &indexTuple->t_self, indexTuple);
-		CommandCounterIncrement();
-		CatalogUpdateIndexes(pg_index, indexTuple);
-	}
+	/* ... and write it back in-place */
+	heap_inplace_update(pg_index, indexTuple);
 
 	heap_close(pg_index, RowExclusiveLock);
 }
