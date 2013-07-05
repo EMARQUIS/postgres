@@ -1390,7 +1390,7 @@ index_concurrent_swap(Oid newIndexOid, Oid oldIndexOid)
  * seen by all the backends as dead.
  */
 void
-index_concurrent_set_dead(Oid indexId, Oid heapId, LOCKTAG locktag)
+index_concurrent_set_dead(Oid heapOid, Oid indexOid, LOCKTAG locktag)
 {
 	Relation	heapRelation;
 	Relation	indexRelation;
@@ -1413,8 +1413,8 @@ index_concurrent_set_dead(Oid indexId, Oid heapId, LOCKTAG locktag)
 	 * conflicts with existing predicate locks, so now is the time to move
 	 * them to the heap relation.
 	 */
-	heapRelation = heap_open(heapId, ShareUpdateExclusiveLock);
-	indexRelation = index_open(indexId, ShareUpdateExclusiveLock);
+	heapRelation = heap_open(heapOid, ShareUpdateExclusiveLock);
+	indexRelation = index_open(indexOid, ShareUpdateExclusiveLock);
 	TransferPredicateLocksToHeapRelation(indexRelation);
 
 	/*
@@ -1423,7 +1423,7 @@ index_concurrent_set_dead(Oid indexId, Oid heapId, LOCKTAG locktag)
 	 * and indislive, then wait till nobody could be using it at all
 	 * anymore.
 	 */
-	index_set_state_flags(indexId, INDEX_DROP_SET_DEAD);
+	index_set_state_flags(indexOid, INDEX_DROP_SET_DEAD);
 
 	/*
 	 * Invalidate the relcache for the table, so that after this commit
@@ -1859,7 +1859,7 @@ index_drop(Oid indexId, bool concurrent)
 		StartTransactionCommand();
 
 		/* Finish invalidation of index and mark it as dead */
-		index_concurrent_set_dead(indexId, heapId, heaplocktag);
+		index_concurrent_set_dead(heapId, indexId, heaplocktag);
 
 		/*
 		 * Again, commit the transaction to make the pg_index update visible
