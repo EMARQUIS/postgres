@@ -62,6 +62,18 @@ extern Oid index_create(Relation heapRelation,
 			 bool concurrent,
 			 bool is_internal);
 
+extern void index_concurrent_build(Oid heapOid,
+								   Oid indexOid,
+								   bool isprimary);
+
+extern void index_concurrent_set_dead(Oid heapOid,
+									  Oid indexOid,
+									  LOCKTAG locktag);
+
+extern void index_concurrent_clear_valid(Relation heapRelation,
+										 Oid indexOid,
+										 bool concurrent);
+
 extern void index_constraint_create(Relation heapRelation,
 						Oid indexRelationId,
 						IndexInfo *indexInfo,
