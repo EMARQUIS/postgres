@@ -1201,7 +1201,6 @@ ReindexRelationConcurrently(Oid relationOid)
 		/* We need the xmin limit to wait for older snapshots. */
 		snapshot = GetTransactionSnapshot();
 		limitXmin = snapshot->xmin;
-		PopActiveSnapshot();
 
 		/*
 		 * We need to wait for transactions that might need the older index

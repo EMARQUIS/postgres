@@ -30,7 +30,7 @@ step "del2"    { DELETE FROM reind_con_tab WHERE data = 'cccc'; }
 step "end2"    { COMMIT; }
 
 session "s3"
-step "reindex" { REINDEX TABLE reind_con_tab CONCURRENTLY; }
+step "reindex" { REINDEX TABLE CONCURRENTLY reind_con_tab; }
 
 permutation "reindex" "sel1" "upd2" "ins2" "del2" "end1" "end2"
 permutation "sel1" "reindex" "upd2" "ins2" "del2" "end1" "end2"
