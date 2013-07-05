@@ -82,7 +82,8 @@ REINDEX { INDEX | TABLE | DATABASE | SYSTEM } [ CONCURRENTLY ] <replaceable clas
       Concurrent indexes based on a <literal>PRIMARY KEY</> or an <literal>
       EXCLUDE</>  constraint need to be dropped with <literal>ALTER TABLE
       DROP CONSTRAINT</>. This is also the case of <literal>UNIQUE</> indexes
-      using constraints. Other indexes can be dropped using <literal>DROP INDEX</>.
+      using constraints. Other indexes can be dropped using <literal>DROP INDEX</>,
+      including invalid toast indexes.
      </para>
     </listitem>
 
@@ -300,10 +301,8 @@ REINDEX { INDEX | TABLE | DATABASE | SYSTEM } [ CONCURRENTLY ] <replaceable clas
     In a concurrent index build, a new index whose storage will replace the one
     to be rebuild is actually entered into the system catalogs in one transaction,
     then two table scans occur in two more transactions.  Once this is performed,
-    the old and fresh indexes are swapped in. During this phase the concurrent
-    index is marked as valid, is then swapped and marked as invalid. An exclusive
-    lock is taken at this phase. Finally two additional transactions are used to
-    mark the concurrent index as not ready and then drop it.
+    the old and fresh indexes are swapped. Finally two additional transactions
+    are used to mark the concurrent index as not ready and then drop it.
    </para>
 
    <para>
@@ -346,8 +345,8 @@ Indexes:
 
    <para>
     Invalid indexes of toast relations can be dropped if a failure occurred
-    during <command>REINDEX CONCURRENTLY</>. Live indexes of toast relations
-    cannot be dropped.
+    during <command>REINDEX CONCURRENTLY</>. Valid indexes, being unique
+    for a given toast relation, cannot be dropped.
    </para>
 
    <para>
@@ -361,9 +360,7 @@ Indexes:
    <para>
     <command>REINDEX</command> uses <literal>ACCESS EXCLUSIVE</literal> lock
     on all the relations involved during operation. When <command>CONCURRENTLY</command>
-    is specified, the operation is done with <literal>SHARE UPDATE EXCLUSIVE</literal>
-    except during relation swap where <literal>ACCESS EXCLUSIVE</literal> lock
-    is taken.
+    is specified, the operation is done with <literal>SHARE UPDATE EXCLUSIVE</literal>.
    </para>
 
    <para>
