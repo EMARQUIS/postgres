@@ -1251,7 +1251,7 @@ ReindexRelationConcurrently(Oid relationOid)
 		 * necessary to wait for for virtual locks on the parent relation
 		 * before setting the index as dead.
 		 */
-		index_concurrent_set_dead(indOid, relOid, *heapLockTag);
+		index_concurrent_set_dead(relOid, indOid, *heapLockTag);
 
 		/* Commit this transaction to make the update visible. */
 		CommitTransactionCommand();
