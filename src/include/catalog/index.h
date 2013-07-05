@@ -70,9 +70,6 @@ extern void index_concurrent_set_dead(Oid heapOid,
 									  Oid indexOid,
 									  LOCKTAG locktag);
 
-extern void index_concurrent_clear_valid(Relation heapRelation,
-										 Oid indexOid);
-
 extern void index_constraint_create(Relation heapRelation,
 						Oid indexRelationId,
 						IndexInfo *indexInfo,
