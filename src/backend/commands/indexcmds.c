@@ -321,13 +321,9 @@ DefineIndex(IndexStmt *stmt,
 	IndexInfo  *indexInfo;
 	int			numberOfAttributes;
 	TransactionId limitXmin;
-	VirtualTransactionId *old_lockholders;
-	VirtualTransactionId *old_snapshots;
-	int			n_old_snapshots;
 	LockRelId	heaprelid;
 	LOCKTAG		heaplocktag;
 	Snapshot	snapshot;
-	int			i;
 
 	/*
 	 * count attributes in index
@@ -652,10 +648,7 @@ DefineIndex(IndexStmt *stmt,
 	 * for an overview of how this works)
 	 *
 	 * Now we must wait until no running transaction could have the table open
-	 * with the old list of indexes.  To do this, inquire which xacts
-	 * currently would conflict with ShareLock on the table -- ie, which ones
-	 * have a lock that permits writing the table.	Then wait for each of
-	 * these xacts to commit or abort.	Note we do not need to worry about
+	 * with the old list of indexes. Note we do not need to worry about
 	 * xacts that open the table for writing after this point; they will see
 	 * the new index when they open it.
 	 *
@@ -664,18 +657,8 @@ DefineIndex(IndexStmt *stmt,
 	 * one of the transactions in question is blocked trying to acquire an
 	 * exclusive lock on our table.  The lock code will detect deadlock and
 	 * error out properly.
-	 *
-	 * Note: GetLockConflicts() never reports our own xid, hence we need not
-	 * check for that.	Also, prepared xacts are not reported, which is fine
-	 * since they certainly aren't going to do anything more.
 	 */
-	old_lockholders = GetLockConflicts(&heaplocktag, ShareLock);
-
-	while (VirtualTransactionIdIsValid(*old_lockholders))
-	{
-		VirtualXactLock(*old_lockholders, true);
-		old_lockholders++;
-	}
+	WaitForVirtualLocks(heaplocktag, ShareLock);
 
 	/*
 	 * At this moment we are sure that there are no transactions with the
@@ -739,13 +722,7 @@ DefineIndex(IndexStmt *stmt,
 	 * We once again wait until no transaction can have the table open with
 	 * the index marked as read-only for updates.
 	 */
-	old_lockholders = GetLockConflicts(&heaplocktag, ShareLock);
-
-	while (VirtualTransactionIdIsValid(*old_lockholders))
-	{
-		VirtualXactLock(*old_lockholders, true);
-		old_lockholders++;
-	}
+	WaitForVirtualLocks(heaplocktag, ShareLock);
 
 	/*
 	 * Now take the "reference snapshot" that will be used by validate_index()
@@ -786,74 +763,9 @@ DefineIndex(IndexStmt *stmt,
 	 * The index is now valid in the sense that it contains all currently
 	 * interesting tuples.	But since it might not contain tuples deleted just
 	 * before the reference snap was taken, we have to wait out any
-	 * transactions that might have older snapshots.  Obtain a list of VXIDs
-	 * of such transactions, and wait for them individually.
-	 *
-	 * We can exclude any running transactions that have xmin > the xmin of
-	 * our reference snapshot; their oldest snapshot must be newer than ours.
-	 * We can also exclude any transactions that have xmin = zero, since they
-	 * evidently have no live snapshot at all (and any one they might be in
-	 * process of taking is certainly newer than ours).  Transactions in other
-	 * DBs can be ignored too, since they'll never even be able to see this
-	 * index.
-	 *
-	 * We can also exclude autovacuum processes and processes running manual
-	 * lazy VACUUMs, because they won't be fazed by missing index entries
-	 * either.	(Manual ANALYZEs, however, can't be excluded because they
-	 * might be within transactions that are going to do arbitrary operations
-	 * later.)
-	 *
-	 * Also, GetCurrentVirtualXIDs never reports our own vxid, so we need not
-	 * check for that.
-	 *
-	 * If a process goes idle-in-transaction with xmin zero, we do not need to
-	 * wait for it anymore, per the above argument.  We do not have the
-	 * infrastructure right now to stop waiting if that happens, but we can at
-	 * least avoid the folly of waiting when it is idle at the time we would
-	 * begin to wait.  We do this by repeatedly rechecking the output of
-	 * GetCurrentVirtualXIDs.  If, during any iteration, a particular vxid
-	 * doesn't show up in the output, we know we can forget about it.
+	 * transactions that might have older snapshots.
 	 */
-	old_snapshots = GetCurrentVirtualXIDs(limitXmin, true, false,
-										  PROC_IS_AUTOVACUUM | PROC_IN_VACUUM,
-										  &n_old_snapshots);
-
-	for (i = 0; i < n_old_snapshots; i++)
-	{
-		if (!VirtualTransactionIdIsValid(old_snapshots[i]))
-			continue;			/* found uninteresting in previous cycle */
-
-		if (i > 0)
-		{
-			/* see if anything's changed ... */
-			VirtualTransactionId *newer_snapshots;
-			int			n_newer_snapshots;
-			int			j;
-			int			k;
-
-			newer_snapshots = GetCurrentVirtualXIDs(limitXmin,
-													true, false,
-										 PROC_IS_AUTOVACUUM | PROC_IN_VACUUM,
-													&n_newer_snapshots);
-			for (j = i; j < n_old_snapshots; j++)
-			{
-				if (!VirtualTransactionIdIsValid(old_snapshots[j]))
-					continue;	/* found uninteresting in previous cycle */
-				for (k = 0; k < n_newer_snapshots; k++)
-				{
-					if (VirtualTransactionIdEquals(old_snapshots[j],
-												   newer_snapshots[k]))
-						break;
-				}
-				if (k >= n_newer_snapshots)		/* not there anymore */
-					SetInvalidVirtualTransactionId(old_snapshots[j]);
-			}
-			pfree(newer_snapshots);
-		}
-
-		if (VirtualTransactionIdIsValid(old_snapshots[i]))
-			VirtualXactLock(old_snapshots[i], true);
-	}
+	WaitForOldSnapshots(limitXmin);
 
 	/*
 	 * Index can now be marked valid -- update its pg_index entry
