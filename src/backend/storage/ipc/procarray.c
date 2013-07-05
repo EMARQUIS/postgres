@@ -2573,7 +2573,7 @@ XidCacheRemoveRunningXids(TransactionId xid,
  *
  * Wait until no transactions hold the relation related to lock those locks.
  * To do this, inquire which xacts currently would conflict with each lock on
- * the table referred by the respective LOCKMODE -- ie, which ones have a lock
+ * the table referred by the respective LOCKTAG -- ie, which ones have a lock
  * that permits writing the relation. Then wait for each of these xacts to
  * commit or abort.
  *
@@ -2617,7 +2617,6 @@ WaitForMultipleVirtualLocks(List *locktags, LOCKMODE lockmode)
 		}
 	}
 
-	/* Clean up */
 	pfree(old_lockholders);
 }
 
@@ -2625,7 +2624,7 @@ WaitForMultipleVirtualLocks(List *locktags, LOCKMODE lockmode)
 /*
  * WaitForVirtualLocks
  *
- * Similar to WaitForMultipleVirtualLocks, but for a single lock tag.
+ * Similar to WaitForMultipleVirtualLocks, but for a single lock.
  */
 void
 WaitForVirtualLocks(LOCKTAG heaplocktag, LOCKMODE lockmode)
@@ -2689,9 +2688,9 @@ WaitForOldSnapshots(TransactionId limitXmin)
 			int n_newer_snapshots, j, k;
 
 			newer_snapshots = GetCurrentVirtualXIDs(limitXmin,
-										true, false,
-										PROC_IS_AUTOVACUUM | PROC_IN_VACUUM,
-										&n_newer_snapshots);
+													true, false,
+													PROC_IS_AUTOVACUUM | PROC_IN_VACUUM,
+													&n_newer_snapshots);
 			for (j = i; j < n_old_snapshots; j++)
 			{
 				if (!VirtualTransactionIdIsValid(old_snapshots[j]))
@@ -2700,7 +2699,7 @@ WaitForOldSnapshots(TransactionId limitXmin)
 				{
 					if (VirtualTransactionIdEquals(old_snapshots[j],
 												   newer_snapshots[k]))
-						break;
+					                                              break;
 				}
 				if (k >= n_newer_snapshots) /* not there anymore */
 					SetInvalidVirtualTransactionId(old_snapshots[j]);

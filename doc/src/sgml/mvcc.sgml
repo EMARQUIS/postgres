@@ -863,8 +863,9 @@ ERROR:  could not serialize access due to read/write dependencies among transact
 
         <para>
          Acquired by <command>VACUUM</command> (without <option>FULL</option>),
-         <command>ANALYZE</>, <command>CREATE INDEX CONCURRENTLY</>, and
-         some forms of <command>ALTER TABLE</command>.
+         <command>ANALYZE</>, <command>CREATE INDEX CONCURRENTLY</>,
+         <command>REINDEX CONCURRENTLY</> and some forms of
+         <command>ALTER TABLE</command>.
         </para>
        </listitem>
       </varlistentry>

@@ -903,6 +903,38 @@ RangeVarCallbackForDropRelation(const RangeVar *rel, Oid relOid, Oid oldRelOid,
 	if (classform->relkind != relkind)
 		DropErrorMsgWrongType(rel->relname, classform->relkind, relkind);
 
+	/*
+	 * Check the case of a system index that might have been invalidated by a
+	 * failed concurrent process and allow its drop. For the time being, this
+	 * only concerns indexes of toast relations that became invalid during a
+	 * REINDEX CONCURRENTLY process.
+	 */
+	if (IsSystemClass(classform) &&
+		relkind == RELKIND_INDEX)
+	{
+		HeapTuple		locTuple;
+		Form_pg_index	indexform;
+		bool			indisvalid;
+
+		locTuple = SearchSysCache1(INDEXRELID, ObjectIdGetDatum(state->heapOid));
+		if (!HeapTupleIsValid(locTuple))
+		{
+			ReleaseSysCache(tuple);
+			return;
+		}
+
+		indexform = (Form_pg_index) GETSTRUCT(locTuple);
+		indisvalid = indexform->indisvalid;
+		ReleaseSysCache(locTuple);
+
+		/* Leave if index entry is not valid */
+		if (!indisvalid)
+		{
+			ReleaseSysCache(tuple);
+			return;
+		}
+	}
+
 	/* Allow DROP to either table owner or schema owner */
 	if (!pg_class_ownercheck(relOid, GetUserId()) &&
 		!pg_namespace_ownercheck(classform->relnamespace, GetUserId()))
