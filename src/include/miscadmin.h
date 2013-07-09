@@ -141,6 +141,7 @@ extern PGDLLIMPORT char *DataDir;
 extern PGDLLIMPORT int NBuffers;
 extern int	MaxBackends;
 extern int	MaxConnections;
+extern int	max_worker_processes;
 
 extern PGDLLIMPORT int MyProcPid;
 extern PGDLLIMPORT pg_time_t MyStartTime;
@@ -342,7 +343,7 @@ typedef enum ProcessingMode
 
 extern ProcessingMode Mode;
 
-#define IsBootstrapProcessingMode()	(Mode == BootstrapProcessing)
+#define IsBootstrapProcessingMode() (Mode == BootstrapProcessing)
 #define IsInitProcessingMode()		(Mode == InitProcessing)
 #define IsNormalProcessingMode()	(Mode == NormalProcessing)
 
@@ -358,7 +359,7 @@ extern ProcessingMode Mode;
 
 
 /*
- * Auxiliary-process type identifiers.  These used to be in bootstrap.h
+ * Auxiliary-process type identifiers.	These used to be in bootstrap.h
  * but it seems saner to have them here, with the ProcessingMode stuff.
  * The MyAuxProcType global is defined and set in bootstrap.c.
  */
@@ -381,7 +382,7 @@ extern AuxProcType MyAuxProcType;
 
 #define AmBootstrapProcess()		(MyAuxProcType == BootstrapProcess)
 #define AmStartupProcess()			(MyAuxProcType == StartupProcess)
-#define AmBackgroundWriterProcess()	(MyAuxProcType == BgWriterProcess)
+#define AmBackgroundWriterProcess() (MyAuxProcType == BgWriterProcess)
 #define AmCheckpointerProcess()		(MyAuxProcType == CheckpointerProcess)
 #define AmWalWriterProcess()		(MyAuxProcType == WalWriterProcess)
 #define AmWalReceiverProcess()		(MyAuxProcType == WalReceiverProcess)
@@ -439,7 +440,7 @@ extern void ValidatePgVersion(const char *path);
 extern void process_shared_preload_libraries(void);
 extern void process_local_preload_libraries(void);
 extern void pg_bindtextdomain(const char *domain);
-extern bool is_authenticated_user_replication_role(void);
+extern bool has_rolreplication(Oid roleid);
 
 /* in access/transam/xlog.c */
 extern bool BackupInProgress(void);

@@ -17,6 +17,9 @@
 #include <sys/stat.h>
 #include <sys/time.h>
 #include <unistd.h>
+#ifdef USE_SSL
+#include <openssl/rand.h>
+#endif
 
 #ifndef WIN32
 /*
@@ -98,10 +101,10 @@ fork_process(void)
 #endif   /* LINUX_OOM_SCORE_ADJ */
 
 		/*
-		 * Older Linux kernels have oom_adj not oom_score_adj.  This works
-		 * similarly except with a different scale of adjustment values.
-		 * If it's necessary to build Postgres to work with either API,
-		 * you can define both LINUX_OOM_SCORE_ADJ and LINUX_OOM_ADJ.
+		 * Older Linux kernels have oom_adj not oom_score_adj.	This works
+		 * similarly except with a different scale of adjustment values. If
+		 * it's necessary to build Postgres to work with either API, you can
+		 * define both LINUX_OOM_SCORE_ADJ and LINUX_OOM_ADJ.
 		 */
 #ifdef LINUX_OOM_ADJ
 		{
@@ -124,6 +127,13 @@ fork_process(void)
 			}
 		}
 #endif   /* LINUX_OOM_ADJ */
+
+		/*
+		 * Make sure processes do not share OpenSSL randomness state.
+		 */
+#ifdef USE_SSL
+		RAND_cleanup();
+#endif
 	}
 
 	return result;

@@ -15,7 +15,7 @@ include $(top_builddir)/src/Makefile.global
 
 NAME= ecpg
 SO_MAJOR_VERSION= 6
-SO_MINOR_VERSION= 5
+SO_MINOR_VERSION= 6
 
 override CPPFLAGS := -I../include -I$(top_srcdir)/src/interfaces/ecpg/include \
 	-I$(libpq_srcdir) -I$(top_builddir)/src/port $(CPPFLAGS)
@@ -42,6 +42,8 @@ ifeq ($(PORTNAME), win32)
 # Link to shfolder.dll instead of shell32.dll
 SHLIB_LINK += -lshfolder
 endif
+
+PKG_CONFIG_REQUIRES_PRIVATE = libpq libpgtypes
 
 all: all-lib
 

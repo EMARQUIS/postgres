@@ -39,7 +39,7 @@
      For convenience,
      a different unit can also be specified explicitly.  Valid memory units
      are <literal>kB</literal> (kilobytes), <literal>MB</literal>
-     (megabytes), and <literal>GB</literal> (gigabytes); valid time units
+     (megabytes), <literal>GB</literal> (gigabytes), and <literal>TB</literal> (terabytes); valid time units
      are <literal>ms</literal> (milliseconds), <literal>s</literal>
      (seconds), <literal>min</literal> (minutes), <literal>h</literal>
      (hours), and <literal>d</literal> (days).  Note that the multiplier
@@ -223,7 +223,7 @@ include 'filename'
        <secondary>in configuration file</secondary>
       </indexterm>
         The <filename>postgresql.conf</> file can also contain
-        <firstterm>include_dir directives</>, which specify an entire directory
+        <literal>include_dir</literal> directives, which specify an entire directory
         of configuration files to include.  It is used similarly:
  <programlisting>
  include_dir 'directory'
@@ -234,7 +234,7 @@ include 'filename'
         names end with the suffix <literal>.conf</literal> will be included.  File
         names that start with the <literal>.</literal> character are also excluded,
         to prevent mistakes as they are hidden on some platforms.  Multiple files
-        within an include directory are processed in filename order. The filenames
+        within an include directory are processed in file name order. The file names
         are ordered by C locale rules, ie. numbers before letters, and uppercase
         letters before lowercase ones.
      </para>
@@ -1211,7 +1211,7 @@ include 'filename'
         Specifies the maximum amount of disk space that a session can use
         for temporary files, such as sort and hash temporary files, or the
         storage file for a held cursor.  A transaction attempting to exceed
-        this limit will be cancelled.
+        this limit will be canceled.
         The value is specified in kilobytes, and <literal>-1</> (the
         default) means no limit.
         Only superusers can change this setting.
@@ -1595,6 +1595,25 @@ include 'filename'
         </para>
        </listitem>
       </varlistentry>
+
+      <varlistentry id="guc-max-worker-processes" xreflabel="max_worker_processes">
+       <term><varname>max_worker_processes</varname> (<type>integer</type>)</term>
+       <indexterm>
+        <primary><varname>max_worker_processes</> configuration parameter</primary>
+       </indexterm>
+       <listitem>
+        <para>
+         Sets the maximum number of background processes that the system
+         can support.  This parameter can only be set at server start.
+        </para>
+
+        <para>
+         When running a standby server, you must set this parameter to the
+         same or higher value than on the master server. Otherwise, queries
+         will not be allowed in the standby server.
+        </para>
+       </listitem>
+      </varlistentry>
      </variablelist>
     </sect2>
    </sect1>
@@ -1661,10 +1680,10 @@ include 'filename'
      </varlistentry>
 
      <varlistentry id="guc-fsync" xreflabel="fsync">
+      <term><varname>fsync</varname> (<type>boolean</type>)</term>
       <indexterm>
        <primary><varname>fsync</> configuration parameter</primary>
       </indexterm>
-      <term><varname>fsync</varname> (<type>boolean</type>)</term>
       <listitem>
        <para>
         If this parameter is on, the <productname>PostgreSQL</> server
@@ -1846,10 +1865,10 @@ include 'filename'
      </varlistentry>
 
      <varlistentry id="guc-full-page-writes" xreflabel="full_page_writes">
+      <term><varname>full_page_writes</varname> (<type>boolean</type>)</term>
       <indexterm>
        <primary><varname>full_page_writes</> configuration parameter</primary>
       </indexterm>
-      <term><varname>full_page_writes</varname> (<type>boolean</type>)</term>
       <listitem>
        <para>
         When this parameter is on, the <productname>PostgreSQL</> server
@@ -3313,6 +3332,7 @@ restore_command = 'copy "C:\\server\\archivedir\\%f" "%p"'  # Windows
      <variablelist>
 
      <varlistentry id="guc-geqo" xreflabel="geqo">
+      <term><varname>geqo</varname> (<type>boolean</type>)</term>
       <indexterm>
        <primary>genetic query optimization</primary>
       </indexterm>
@@ -3323,7 +3343,6 @@ restore_command = 'copy "C:\\server\\archivedir\\%f" "%p"'  # Windows
       <indexterm>
        <primary><varname>geqo</> configuration parameter</primary>
       </indexterm>
-      <term><varname>geqo</varname> (<type>boolean</type>)</term>
       <listitem>
        <para>
         Enables or disables genetic query optimization.
@@ -3751,7 +3770,7 @@ local0.*    /var/log/postgresql
        <para>
         When <varname>logging_collector</varname> is enabled,
         this parameter sets the file names of the created log files.  The value
-        is treated as a <systemitem>strftime</systemitem> pattern,
+        is treated as a <function>strftime</function> pattern,
         so <literal>%</literal>-escapes can be used to specify time-varying
         file names.  (Note that if there are
         any time-zone-dependent <literal>%</literal>-escapes, the computation
@@ -5365,6 +5384,7 @@ COPY postgres_log FROM '/full/path/to/logfile.csv' WITH csv;
      </varlistentry>
 
      <varlistentry id="guc-default-transaction-isolation" xreflabel="default_transaction_isolation">
+      <term><varname>default_transaction_isolation</varname> (<type>enum</type>)</term>
       <indexterm>
        <primary>transaction isolation level</primary>
        <secondary>setting default</secondary>
@@ -5372,7 +5392,6 @@ COPY postgres_log FROM '/full/path/to/logfile.csv' WITH csv;
       <indexterm>
        <primary><varname>default_transaction_isolation</> configuration parameter</primary>
       </indexterm>
-      <term><varname>default_transaction_isolation</varname> (<type>enum</type>)</term>
       <listitem>
        <para>
         Each SQL transaction has an isolation level, which can be
@@ -5391,6 +5410,7 @@ COPY postgres_log FROM '/full/path/to/logfile.csv' WITH csv;
      </varlistentry>
 
      <varlistentry id="guc-default-transaction-read-only" xreflabel="default_transaction_read_only">
+      <term><varname>default_transaction_read_only</varname> (<type>boolean</type>)</term>
       <indexterm>
        <primary>read-only transaction</primary>
        <secondary>setting default</secondary>
@@ -5398,8 +5418,6 @@ COPY postgres_log FROM '/full/path/to/logfile.csv' WITH csv;
       <indexterm>
        <primary><varname>default_transaction_read_only</> configuration parameter</primary>
       </indexterm>
-
-      <term><varname>default_transaction_read_only</varname> (<type>boolean</type>)</term>
       <listitem>
        <para>
         A read-only SQL transaction cannot alter non-temporary tables.
@@ -5414,6 +5432,7 @@ COPY postgres_log FROM '/full/path/to/logfile.csv' WITH csv;
      </varlistentry>
 
      <varlistentry id="guc-default-transaction-deferrable" xreflabel="default_transaction_deferrable">
+      <term><varname>default_transaction_deferrable</varname> (<type>boolean</type>)</term>
       <indexterm>
        <primary>deferrable transaction</primary>
        <secondary>setting default</secondary>
@@ -5421,8 +5440,6 @@ COPY postgres_log FROM '/full/path/to/logfile.csv' WITH csv;
       <indexterm>
        <primary><varname>default_transaction_deferrable</> configuration parameter</primary>
       </indexterm>
-
-      <term><varname>default_transaction_deferrable</varname> (<type>boolean</type>)</term>
       <listitem>
        <para>
         When running at the <literal>serializable</> isolation level,
@@ -5740,6 +5757,7 @@ SET XML OPTION { DOCUMENT | CONTENT };
      </varlistentry>
 
      <varlistentry id="guc-extra-float-digits" xreflabel="extra_float_digits">
+      <term><varname>extra_float_digits</varname> (<type>integer</type>)</term>
       <indexterm>
        <primary>significant digits</primary>
       </indexterm>
@@ -5750,8 +5768,6 @@ SET XML OPTION { DOCUMENT | CONTENT };
       <indexterm>
        <primary><varname>extra_float_digits</> configuration parameter</primary>
       </indexterm>
-
-      <term><varname>extra_float_digits</varname> (<type>integer</type>)</term>
       <listitem>
        <para>
         This parameter adjusts the number of digits displayed for
@@ -5762,6 +5778,7 @@ SET XML OPTION { DOCUMENT | CONTENT };
         partially-significant digits; this is especially useful for dumping
         float data that needs to be restored exactly.  Or it can be set
         negative to suppress unwanted digits.
+        See also <xref linkend="datatype-float">.
        </para>
       </listitem>
      </varlistentry>
@@ -6027,6 +6044,7 @@ dynamic_library_path = 'C:\tools\postgresql;H:\my_project\lib;$libdir'
      <variablelist>
 
      <varlistentry id="guc-deadlock-timeout" xreflabel="deadlock_timeout">
+      <term><varname>deadlock_timeout</varname> (<type>integer</type>)</term>
       <indexterm>
        <primary>deadlock</primary>
        <secondary>timeout during</secondary>
@@ -6038,8 +6056,6 @@ dynamic_library_path = 'C:\tools\postgresql;H:\my_project\lib;$libdir'
       <indexterm>
        <primary><varname>deadlock_timeout</> configuration parameter</primary>
       </indexterm>
-
-      <term><varname>deadlock_timeout</varname> (<type>integer</type>)</term>
       <listitem>
        <para>
         This is the amount of time, in milliseconds, to wait on a lock

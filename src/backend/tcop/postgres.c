@@ -69,6 +69,7 @@
 #include "tcop/tcopprot.h"
 #include "tcop/utility.h"
 #include "utils/lsyscache.h"
+#include "utils/memdebug.h"
 #include "utils/memutils.h"
 #include "utils/ps_status.h"
 #include "utils/snapmgr.h"
@@ -845,6 +846,10 @@ exec_simple_query(const char *query_string)
 	pgstat_report_activity(STATE_RUNNING, query_string);
 
 	TRACE_POSTGRESQL_QUERY_START(query_string);
+
+#ifdef USE_VALGRIND
+	VALGRIND_PRINTF("statement: %s\n", query_string);
+#endif
 
 	/*
 	 * We use save_log_statement_stats so ShowUsage doesn't report incorrect
@@ -2895,7 +2900,7 @@ ProcessInterrupts(void)
 			DisableNotifyInterrupt();
 			DisableCatchupInterrupt();
 			ereport(ERROR,
-					(errcode(ERRCODE_QUERY_CANCELED),
+					(errcode(ERRCODE_LOCK_NOT_AVAILABLE),
 					 errmsg("canceling statement due to lock timeout")));
 		}
 		if (get_timeout_indicator(STATEMENT_TIMEOUT, true))
@@ -3247,13 +3252,14 @@ get_stats_option_name(const char *arg)
  * coming from the client, or PGC_SUSET for insecure options coming from
  * a superuser client.
  *
- * Returns the database name extracted from the command line, if any.
+ * If a database name is present in the command line arguments, it's
+ * returned into *dbname (this is allowed only if *dbname is initially NULL).
  * ----------------------------------------------------------------
  */
-const char *
-process_postgres_switches(int argc, char *argv[], GucContext ctx)
+void
+process_postgres_switches(int argc, char *argv[], GucContext ctx,
+						  const char **dbname)
 {
-	const char *dbname;
 	bool		secure = (ctx == PGC_POSTMASTER);
 	int			errs = 0;
 	GucSource	gucsource;
@@ -3304,7 +3310,8 @@ process_postgres_switches(int argc, char *argv[], GucContext ctx)
 
 			case 'b':
 				/* Undocumented flag used for binary upgrades */
-				IsBinaryUpgrade = true;
+				if (secure)
+					IsBinaryUpgrade = true;
 				break;
 
 			case 'C':
@@ -3321,7 +3328,8 @@ process_postgres_switches(int argc, char *argv[], GucContext ctx)
 				break;
 
 			case 'E':
-				EchoQuery = true;
+				if (secure)
+					EchoQuery = true;
 				break;
 
 			case 'e':
@@ -3346,7 +3354,8 @@ process_postgres_switches(int argc, char *argv[], GucContext ctx)
 				break;
 
 			case 'j':
-				UseNewLine = 0;
+				if (secure)
+					UseNewLine = 0;
 				break;
 
 			case 'k':
@@ -3464,13 +3473,10 @@ process_postgres_switches(int argc, char *argv[], GucContext ctx)
 	}
 
 	/*
-	 * Should be no more arguments except an optional database name, and
-	 * that's only in the secure case.
+	 * Optional database name should be there only if *dbname is NULL.
 	 */
-	if (!errs && secure && argc - optind >= 1)
-		dbname = strdup(argv[optind++]);
-	else
-		dbname = NULL;
+	if (!errs && dbname && *dbname == NULL && argc - optind >= 1)
+		*dbname = strdup(argv[optind++]);
 
 	if (errs || argc != optind)
 	{
@@ -3499,8 +3505,6 @@ process_postgres_switches(int argc, char *argv[], GucContext ctx)
 #ifdef HAVE_INT_OPTRESET
 	optreset = 1;				/* some systems need this too */
 #endif
-
-	return dbname;
 }
 
 
@@ -3510,14 +3514,16 @@ process_postgres_switches(int argc, char *argv[], GucContext ctx)
  *
  * argc/argv are the command line arguments to be used.  (When being forked
  * by the postmaster, these are not the original argv array of the process.)
- * username is the (possibly authenticated) PostgreSQL user name to be used
- * for the session.
+ * dbname is the name of the database to connect to, or NULL if the database
+ * name should be extracted from the command line arguments or defaulted.
+ * username is the PostgreSQL user name to be used for the session.
  * ----------------------------------------------------------------
  */
 void
-PostgresMain(int argc, char *argv[], const char *username)
+PostgresMain(int argc, char *argv[],
+			 const char *dbname,
+			 const char *username)
 {
-	const char *dbname;
 	int			firstchar;
 	StringInfoData input_message;
 	sigjmp_buf	local_sigjmp_buf;
@@ -3564,7 +3570,7 @@ PostgresMain(int argc, char *argv[], const char *username)
 	/*
 	 * Parse command-line options.
 	 */
-	dbname = process_postgres_switches(argc, argv, PGC_POSTMASTER);
+	process_postgres_switches(argc, argv, PGC_POSTMASTER, &dbname);
 
 	/* Must have gotten a database name, or have a default (the username) */
 	if (dbname == NULL)
@@ -3621,7 +3627,7 @@ PostgresMain(int argc, char *argv[], const char *username)
 			pqsignal(SIGQUIT, quickdie);		/* hard crash time */
 		else
 			pqsignal(SIGQUIT, die);		/* cancel current query and exit */
-		InitializeTimeouts();		/* establishes SIGALRM handler */
+		InitializeTimeouts();	/* establishes SIGALRM handler */
 
 		/*
 		 * Ignore failure to write to frontend. Note: if frontend closes

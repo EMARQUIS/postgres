@@ -1506,7 +1506,8 @@
        <entry>
         Encode binary data into a textual representation.  Supported
         formats are: <literal>base64</>, <literal>hex</>, <literal>escape</>.
-        <literal>escape</> merely outputs null bytes as <literal>\000</> and
+        <literal>escape</> converts zero bytes and high-bit-set bytes to
+        octal sequences (<literal>\</><replaceable>nnn</>) and
         doubles backslashes.
        </entry>
        <entry><literal>encode(E'123\\000\\001', 'base64')</literal></entry>
@@ -3234,12 +3235,12 @@ SELECT format('Testing %3$s, %2$s, %s', 'one', 'two', 'three');
          <primary>decode</primary>
         </indexterm>
        <literal><function>decode(<parameter>string</parameter> <type>text</type>,
-              <parameter>type</parameter> <type>text</type>)</function></literal>
+       <parameter>format</parameter> <type>text</type>)</function></literal>
       </entry>
       <entry><type>bytea</type></entry>
       <entry>
-       Decode binary string from <parameter>string</parameter> previously
-       encoded with <function>encode</>.  Parameter type is same as in <function>encode</>.
+       Decode binary data from textual representation in <parameter>string</>.
+       Options for <parameter>format</> are same as in <function>encode</>.
       </entry>
       <entry><literal>decode(E'123\\000456', 'escape')</literal></entry>
       <entry><literal>123\000456</literal></entry>
@@ -3250,13 +3251,16 @@ SELECT format('Testing %3$s, %2$s, %s', 'one', 'two', 'three');
         <indexterm>
          <primary>encode</primary>
         </indexterm>
-       <literal><function>encode(<parameter>string</parameter> <type>bytea</type>,
-              <parameter>type</parameter> <type>text</type>)</function></literal>
+       <literal><function>encode(<parameter>data</parameter> <type>bytea</type>,
+       <parameter>format</parameter> <type>text</type>)</function></literal>
       </entry>
       <entry><type>text</type></entry>
       <entry>
-       Encode binary string to <acronym>ASCII</acronym>-only representation.  Supported
-       types are: <literal>base64</>, <literal>hex</>, <literal>escape</>.
+       Encode binary data into a textual representation.  Supported
+       formats are: <literal>base64</>, <literal>hex</>, <literal>escape</>.
+       <literal>escape</> converts zero bytes and high-bit-set bytes to
+       octal sequences (<literal>\</><replaceable>nnn</>) and
+       doubles backslashes.
       </entry>
       <entry><literal>encode(E'123\\000456'::bytea, 'escape')</literal></entry>
       <entry><literal>123\000456</literal></entry>
@@ -4044,24 +4048,24 @@ SELECT col1, (SELECT regexp_matches(col2, '(bar)(beque)')) FROM tab;
     Some examples:
 <programlisting>
 
-SELECT foo FROM regexp_split_to_table('the quick brown fox jumped over the lazy dog', E'\\s+') AS foo;
+SELECT foo FROM regexp_split_to_table('the quick brown fox jumps over the lazy dog', E'\\s+') AS foo;
   foo   
---------
+-------
  the    
  quick  
  brown  
  fox    
- jumped 
+ jumps 
  over   
  the    
  lazy   
  dog    
 (9 rows)
 
-SELECT regexp_split_to_array('the quick brown fox jumped over the lazy dog', E'\\s+');
+SELECT regexp_split_to_array('the quick brown fox jumps over the lazy dog', E'\\s+');
               regexp_split_to_array             
-------------------------------------------------
- {the,quick,brown,fox,jumped,over,the,lazy,dog}
+-----------------------------------------------
+ {the,quick,brown,fox,jumps,over,the,lazy,dog}
 (1 row)
 
 SELECT foo FROM regexp_split_to_table('the quick brown fox', E'\\s*') AS foo;
@@ -5640,6 +5644,10 @@ SELECT SUBSTRING('XY1234Z', 'Y*?([0-9]{1,3})');
        <row>
         <entry><literal>tz</literal></entry>
         <entry>lower case time-zone name</entry>
+       </row>
+       <row>
+        <entry><literal>OF</literal></entry>
+        <entry>time-zone offset</entry>
        </row>
       </tbody>
      </tgroup>
@@ -9835,24 +9843,82 @@ table2-mapping
  </sect1>
 
  <sect1 id="functions-json">
-  <title>JSON Functions</title>
+  <title>JSON Functions and Operators</title>
 
   <indexterm zone="functions-json">
     <primary>JSON</primary>
     <secondary>Functions and operators</secondary>
   </indexterm>
 
+   <para>
+   <xref linkend="functions-json-op-table"> shows the operators that are
+   available for use with JSON (see <xref linkend="datatype-json">) data.
+  </para>
+
+  <table id="functions-json-op-table">
+     <title>JSON Operators</title>
+     <tgroup cols="4">
+      <thead>
+       <row>
+        <entry>Operator</entry>
+        <entry>Right Operand Type</entry>
+        <entry>Description</entry>
+        <entry>Example</entry>
+       </row>
+      </thead>
+      <tbody>
+       <row>
+        <entry><literal>-&gt;</literal></entry>
+        <entry>int</entry>
+        <entry>Get JSON array element</entry>
+        <entry><literal>'[1,2,3]'::json-&gt;2</literal></entry>
+       </row>
+       <row>
+        <entry><literal>-&gt;</literal></entry>
+        <entry>text</entry>
+        <entry>Get JSON object field</entry>
+        <entry><literal>'{"a":1,"b":2}'::json-&gt;'b'</literal></entry>
+       </row>
+        <row>
+        <entry><literal>-&gt;&gt;</literal></entry>
+        <entry>int</entry>
+        <entry>Get JSON array element as text</entry>
+        <entry><literal>'[1,2,3]'::json-&gt;&gt;2</literal></entry>
+       </row>
+       <row>
+        <entry><literal>-&gt;&gt;</literal></entry>
+        <entry>text</entry>
+        <entry>Get JSON object field as text</entry>
+        <entry><literal>'{"a":1,"b":2}'::json-&gt;&gt;'b'</literal></entry>
+       </row>
+       <row>
+        <entry><literal>#&gt;</literal></entry>
+        <entry>array of text</entry>
+        <entry>Get JSON object at specified path</entry>
+        <entry><literal>'{"a":[1,2,3],"b":[4,5,6]}'::json#&gt;'{a,2}'</literal></entry>
+       </row>
+       <row>
+        <entry><literal>#&gt;&gt;</literal></entry>
+        <entry>array of text</entry>
+        <entry>Get JSON object at specified path as text</entry>
+        <entry><literal>'{"a":[1,2,3],"b":[4,5,6]}'::json#&gt;&gt;'{a,2}'</literal></entry>
+       </row>
+      </tbody>
+     </tgroup>
+   </table>
+
   <para>
    <xref linkend="functions-json-table"> shows the functions that are available
-   for creating JSON (see <xref linkend="datatype-json">) data.
+   for creating and manipulating JSON (see <xref linkend="datatype-json">) data.
   </para>
 
   <table id="functions-json-table">
     <title>JSON Support Functions</title>
-    <tgroup cols="4">
+    <tgroup cols="5">
      <thead>
       <row>
        <entry>Function</entry>
+       <entry>Return Type</entry>
        <entry>Description</entry>
        <entry>Example</entry>
        <entry>Example Result</entry>
@@ -9866,6 +9932,7 @@ table2-mapping
          </indexterm>
          <literal>array_to_json(anyarray [, pretty_bool])</literal>
        </entry>
+       <entry><type>json</type></entry>
        <entry>
          Returns the array as JSON. A PostgreSQL multidimensional array
          becomes a JSON array of arrays. Line feeds will be added between
@@ -9881,6 +9948,7 @@ table2-mapping
          </indexterm>
          <literal>row_to_json(record [, pretty_bool])</literal>
        </entry>
+       <entry><type>json</type></entry>
        <entry>
          Returns the row as JSON. Line feeds will be added between level
          1 elements if <parameter>pretty_bool</parameter> is true.
@@ -9895,15 +9963,192 @@ table2-mapping
          </indexterm>
          <literal>to_json(anyelement)</literal>
        </entry>
+       <entry><type>json</type></entry>
        <entry>
-         Returns the value as JSON. If the data type is not builtin, and there
-         is a cast from the type to json, the cast function will be used to
+         Returns the value as JSON. If the data type is not built in, and there
+         is a cast from the type to <type>json</type>, the cast function will be used to
          perform the conversion. Otherwise, for any value other than a number,
-         a boolean or NULL, the text representation will be used, escaped and
+         a Boolean, or a null value, the text representation will be used, escaped and
          quoted so that it is legal JSON.
        </entry>
-       <entry><literal>to_json('Fred said "Hi."'</literal></entry>
+       <entry><literal>to_json('Fred said "Hi."'::text)</literal></entry>
        <entry><literal>"Fred said \"Hi.\""</literal></entry>
+      </row>
+      <row>
+       <entry>
+         <indexterm>
+          <primary>json_array_length</primary>
+         </indexterm>
+         <literal>json_array_length(json)</literal>
+       </entry>
+       <entry><type>int</type></entry>
+       <entry>
+         Returns the number of elements in the outermost JSON array.
+       </entry>
+       <entry><literal>json_array_length('[1,2,3,{"f1":1,"f2":[5,6]},4]')</literal></entry>
+       <entry><literal>5</literal></entry>
+      </row>
+      <row>
+       <entry>
+         <indexterm>
+          <primary>json_each</primary>
+         </indexterm>
+         <literal>json_each(json)</literal>
+       </entry>
+       <entry><type>SETOF key text, value json</type></entry>
+       <entry>
+         Expands the outermost JSON object into a set of key/value pairs.
+       </entry>
+       <entry><literal>select * from json_each('{"a":"foo", "b":"bar"}')</literal></entry>
+       <entry>
+<programlisting>
+ key | value
+-----+-------
+ a   | "foo"
+ b   | "bar"
+ </programlisting>
+       </entry>
+      </row>
+      <row>
+       <entry>
+         <indexterm>
+          <primary>json_each_text</primary>
+         </indexterm>
+         <literal>json_each_text(from_json json)</literal>
+       </entry>
+       <entry><type>SETOF key text, value text</type></entry>
+       <entry>
+         Expands the outermost JSON object into a set of key/value pairs. The
+         returned value will be of type text.
+       </entry>
+       <entry><literal>select * from json_each_text('{"a":"foo", "b":"bar"}')</literal></entry>
+       <entry>
+<programlisting>
+ key | value
+-----+-------
+ a   | foo
+ b   | bar
+ </programlisting>
+       </entry>
+      </row>
+      <row>
+       <entry>
+         <indexterm>
+          <primary>json_extract_path</primary>
+         </indexterm>
+         <literal>json_extract_path(from_json json, VARIADIC path_elems text[])</literal>
+       </entry>
+       <entry><type>json</type></entry>
+       <entry>
+         Returns JSON object pointed to by <parameter>path_elems</parameter>.
+       </entry>
+       <entry><literal>json_extract_path('{"f2":{"f3":1},"f4":{"f5":99,"f6":"foo"}}','f4')</literal></entry>
+       <entry><literal>{"f5":99,"f6":"foo"}</literal></entry>
+      </row>
+      <row>
+       <entry>
+         <indexterm>
+          <primary>json_extract_path_text</primary>
+         </indexterm>
+         <literal>json_extract_path_text(from_json json, VARIADIC path_elems text[])</literal>
+       </entry>
+       <entry><type>text</type></entry>
+       <entry>
+         Returns JSON object pointed to by <parameter>path_elems</parameter>.
+       </entry>
+       <entry><literal>json_extract_path_text('{"f2":{"f3":1},"f4":{"f5":99,"f6":"foo"}}','f4', 'f6')</literal></entry>
+       <entry><literal>foo</literal></entry>
+      </row>
+      <row>
+       <entry>
+         <indexterm>
+          <primary>json_object_keys</primary>
+         </indexterm>
+         <literal>json_object_keys(json)</literal>
+       </entry>
+       <entry><type>SETOF text</type></entry>
+       <entry>
+          Returns set of keys in the JSON object.  Only the <quote>outer</quote> object will be displayed.
+       </entry>
+       <entry><literal>json_object_keys('{"f1":"abc","f2":{"f3":"a", "f4":"b"}}')</literal></entry>
+       <entry>
+<programlisting>
+ json_object_keys
+------------------
+ f1
+ f2
+</programlisting>
+       </entry>
+      </row>
+      <row>
+       <entry>
+         <indexterm>
+          <primary>json_populate_record</primary>
+         </indexterm>
+         <literal>json_populate_record(base anyelement, from_json json, [, use_json_as_text bool=false]</literal>
+       </entry>
+       <entry><type>anyelement</type></entry>
+       <entry>
+         Expands the object in <replaceable>from_json</replaceable> to a row whose columns match
+         the record type defined by base. Conversion will be best
+         effort; columns in base with no corresponding key in <replaceable>from_json</replaceable>
+         will be left null.  A column may only be specified once.
+       </entry>
+       <entry><literal>select * from json_populate_record(null::x, '{"a":1,"b":2}')</literal></entry>
+       <entry>
+<programlisting>
+ a | b
+---+---
+ 1 | 2
+</programlisting>
+       </entry>
+      </row>
+      <row>
+       <entry>
+         <indexterm>
+          <primary>json_populate_recordset</primary>
+         </indexterm>
+         <literal>json_populate_recordset(base anyelement, from_json json, [, use_json_as_text bool=false]</literal>
+       </entry>
+       <entry><type>SETOF anyelement</type></entry>
+       <entry>
+         Expands the outermost set of objects in <replaceable>from_json</replaceable> to a set
+         whose columns match the record type defined by base.
+         Conversion will be best effort; columns in base with no
+         corresponding key in <replaceable>from_json</replaceable> will be left null.  A column
+         may only be specified once.
+       </entry>
+       <entry><literal>select * from json_populate_recordset(null::x, '[{"a":1,"b":2},{"a":3,"b":4}]')</literal></entry>
+       <entry>
+<programlisting>
+ a | b
+---+---
+ 1 | 2
+ 3 | 4
+ </programlisting>
+       </entry>
+      </row>
+      <row>
+       <entry>
+         <indexterm>
+          <primary>json_array_elements</primary>
+         </indexterm>
+         <literal>json_array_elements(json)</literal>
+       </entry>
+       <entry><type>SETOF json</type></entry>
+       <entry>
+         Expands a JSON array to a set of JSON elements.
+       </entry>
+       <entry><literal>json_array_elements('[1,true, [2,false]]')</literal></entry>
+       <entry>
+<programlisting>
+   value
+-----------
+ 1
+ true
+ [2,false]
+</programlisting>
+       </entry>
       </row>
      </tbody>
     </tgroup>
@@ -9911,8 +10156,28 @@ table2-mapping
 
   <note>
     <para>
-      The <xref linkend="hstore"> extension has a cast from hstore to
-      json, so that converted hstore values are represented as json objects,
+      The <type>json</type> functions and operators can impose stricter validity requirements
+      than the type's input functions. In particular, they check much more closely that any use
+      of Unicode surrogate pairs to designate characters outside the Unicode Basic Multilingual
+      Plane is correct.
+    </para>
+  </note>
+
+  <note>
+    <para>
+      Many of these functions and operators will convert Unicode escapes
+      in the JSON text to the appropriate UTF8 character when the database encoding is UTF8. In
+      other encodings the escape sequence must be for an ASCII character, and any other code point
+      in a Unicode escape sequence will result in an error.
+      In general, it is best to avoid mixing Unicode escapes in JSON with a non-UTF8 database
+      encoding, if possible.
+    </para>
+  </note>
+
+  <note>
+    <para>
+      The <xref linkend="hstore"> extension has a cast from <type>hstore</type> to
+      <type>json</type>, so that converted <type>hstore</type> values are represented as JSON objects,
       not as string values.
     </para>
   </note>
@@ -9920,9 +10185,8 @@ table2-mapping
   <para>
     See also <xref linkend="functions-aggregate"> about the aggregate
     function <function>json_agg</function> which aggregates record
-    values as json efficiently.
+    values as JSON efficiently.
   </para>
-
  </sect1>
 
  <sect1 id="functions-sequence">
@@ -9945,12 +10209,11 @@ table2-mapping
   </indexterm>
 
   <para>
-   This section describes <productname>PostgreSQL</productname>'s
-   functions for operating on <firstterm>sequence objects</firstterm>.
-   Sequence objects (also called sequence generators or just
-   sequences) are special single-row tables created with <xref
+   This section describes functions for operating on <firstterm>sequence
+   objects</firstterm>, also called sequence generators or just sequences.
+   Sequence objects are special single-row tables created with <xref
    linkend="sql-createsequence">.
-   A sequence object is usually used to generate unique identifiers
+   Sequence objects are commonly used to generate unique identifiers
    for rows of a table.  The sequence functions, listed in <xref
    linkend="functions-sequence-table">, provide simple, multiuser-safe
    methods for obtaining successive sequence values from sequence
@@ -10303,6 +10566,16 @@ SELECT a,
 SELECT ... WHERE CASE WHEN x &lt;&gt; 0 THEN y/x &gt; 1.5 ELSE false END;
 </programlisting>
    </para>
+
+   <note>
+    <para>
+     As described in <xref linkend="xfunc-volatility">, functions and
+     operators marked <literal>IMMUTABLE</literal> can be evaluated when
+     the query is planned rather than when it is executed.  This means
+     that constant parts of a subexpression that is not evaluated during
+     query execution might still be evaluated during query planning.
+    </para>
+   </note>
   </sect2>
 
   <sect2 id="functions-coalesce-nvl-ifnull">
@@ -11306,7 +11579,7 @@ SELECT NULLIF(value, '(none)') ...
       <entry>
        <type>json</type>
       </entry>
-      <entry>aggregates records as a json array of objects</entry>
+      <entry>aggregates records as a JSON array of objects</entry>
      </row>
 
      <row>
@@ -13999,10 +14272,6 @@ SELECT pg_type_is_visible('myschema.widget'::regtype);
    </indexterm>
 
    <indexterm>
-    <primary>pg_relation_is_scannable</primary>
-   </indexterm>
-
-   <indexterm>
     <primary>pg_typeof</primary>
    </indexterm>
 
@@ -14169,11 +14438,6 @@ SELECT pg_type_is_visible('myschema.widget'::regtype);
        <entry><literal><function>pg_tablespace_location(<parameter>tablespace_oid</parameter>)</function></literal></entry>
        <entry><type>text</type></entry>
        <entry>get the path in the file system that this tablespace is located in</entry>
-      </row>
-      <row>
-       <entry><literal><function>pg_relation_is_scannable(<parameter>relation_oid</parameter>)</function></literal></entry>
-       <entry><type>boolean</type></entry>
-       <entry>is the relation scannable; a materialized view which has not been loaded will not be scannable</entry>
       </row>
       <row>
        <entry><literal><function>pg_typeof(<parameter>any</parameter>)</function></literal></entry>
@@ -14673,7 +14937,7 @@ SELECT set_config('log_statement_stats', 'off', false);
   </sect2>
 
   <sect2 id="functions-admin-signal">
-   <title>Server Signalling Functions</title>
+   <title>Server Signaling Functions</title>
 
    <indexterm>
     <primary>pg_cancel_backend</primary>
@@ -14701,7 +14965,7 @@ SELECT set_config('log_statement_stats', 'off', false);
    </para>
 
    <table id="functions-admin-signal-table">
-    <title>Server Signalling Functions</title>
+    <title>Server Signaling Functions</title>
     <tgroup cols="3">
      <thead>
       <row><entry>Name</entry> <entry>Return Type</entry> <entry>Description</entry>
@@ -15980,4 +16244,117 @@ FOR EACH ROW EXECUTE PROCEDURE suppress_redundant_updates_trigger();
         <xref linkend="SQL-CREATETRIGGER">.
     </para>
   </sect1>
+
+  <sect1 id="functions-event-triggers">
+   <title>Event Trigger Functions</title>
+
+   <indexterm>
+     <primary>pg_event_trigger_dropped_objects</primary>
+   </indexterm>
+
+   <para>
+    Currently <productname>PostgreSQL</> provides one built-in event trigger
+    helper function, <function>pg_event_trigger_dropped_objects</>.
+   </para>
+
+   <para>
+    <function>pg_event_trigger_dropped_objects</> returns a list of all object
+    dropped by the command in whose <literal>sql_drop</> event it is called.
+    If called in any other context,
+    <function>pg_event_trigger_dropped_objects</> raises an error.
+    <function>pg_event_trigger_dropped_objects</> returns the following columns:
+
+    <informaltable>
+     <tgroup cols="3">
+      <thead>
+       <row>
+        <entry>Name</entry>
+        <entry>Type</entry>
+        <entry>Description</entry>
+       </row>
+      </thead>
+
+      <tbody>
+       <row>
+        <entry><literal>classid</literal></entry>
+        <entry><type>Oid</type></entry>
+        <entry>OID of catalog the object belonged in</entry>
+       </row>
+       <row>
+        <entry><literal>objid</literal></entry>
+        <entry><type>Oid</type></entry>
+        <entry>OID the object had within the catalog</entry>
+       </row>
+       <row>
+        <entry><literal>objsubid</literal></entry>
+        <entry><type>int32</type></entry>
+        <entry>Object sub-id (e.g. attribute number for columns)</entry>
+       </row>
+       <row>
+        <entry><literal>object_type</literal></entry>
+        <entry><type>text</type></entry>
+        <entry>Type of the object</entry>
+       </row>
+       <row>
+        <entry><literal>schema_name</literal></entry>
+        <entry><type>text</type></entry>
+        <entry>
+         Name of the schema the object belonged in, if any; otherwise <literal>NULL</>.
+         No quoting is applied.
+        </entry>
+       </row>
+       <row>
+        <entry><literal>object_name</literal></entry>
+        <entry><type>text</type></entry>
+        <entry>
+         Name of the object, if the combination of schema and name can be
+         used as an unique identifier for the object; otherwise <literal>NULL</>.
+         No quoting is applied, and name is never schema-qualified.
+        </entry>
+       </row>
+       <row>
+        <entry><literal>object_identity</literal></entry>
+        <entry><type>text</type></entry>
+        <entry>
+         Text rendering of the object identity, schema-qualified. Each and every
+         identifier present in the identity is quoted if necessary.
+        </entry>
+       </row>
+      </tbody>
+     </tgroup>
+    </informaltable>
+   </para>
+
+   <para>
+    The <function>pg_event_trigger_dropped_objects</> function can be used
+    in an event trigger like this:
+<programlisting>
+CREATE FUNCTION test_event_trigger_for_drops()
+        RETURNS event_trigger LANGUAGE plpgsql AS $$
+DECLARE
+    obj record;
+BEGIN
+    FOR obj IN SELECT * FROM pg_event_trigger_dropped_objects()
+    LOOP
+        RAISE NOTICE '% dropped object: % %.% %',
+                     tg_tag,
+                     obj.object_type,
+                     obj.schema_name,
+                     obj.object_name,
+                     obj.object_identity;
+    END LOOP;
+END
+$$;
+CREATE EVENT TRIGGER test_event_trigger_for_drops
+   ON sql_drop
+   EXECUTE PROCEDURE test_event_trigger_for_drops();
+</programlisting>
+    </para>
+
+     <para>
+       For more information about event triggers,
+       see <xref linkend="event-triggers">.
+    </para>
+  </sect1>
+
 </chapter>

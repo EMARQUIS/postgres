@@ -440,7 +440,7 @@ progress_report(int tablespacenum, const char *filename)
 					VERBOSE_FILENAME_LENGTH + 5, "");
 		else
 		{
-			bool truncate = (strlen(filename) > VERBOSE_FILENAME_LENGTH);
+			bool		truncate = (strlen(filename) > VERBOSE_FILENAME_LENGTH);
 
 			fprintf(stderr,
 					ngettext("%*s/%s kB (%d%%), %d/%d tablespace (%s%-*.*s)",
@@ -449,11 +449,11 @@ progress_report(int tablespacenum, const char *filename)
 					(int) strlen(totalsize_str),
 					totaldone_str, totalsize_str, percent,
 					tablespacenum, tablespacecount,
-					/* Prefix with "..." if we do leading truncation */
+			/* Prefix with "..." if we do leading truncation */
 					truncate ? "..." : "",
-					truncate ? VERBOSE_FILENAME_LENGTH - 3 : VERBOSE_FILENAME_LENGTH,
-					truncate ? VERBOSE_FILENAME_LENGTH - 3 : VERBOSE_FILENAME_LENGTH,
-					/* Truncate filename at beginning if it's too long */
+			truncate ? VERBOSE_FILENAME_LENGTH - 3 : VERBOSE_FILENAME_LENGTH,
+			truncate ? VERBOSE_FILENAME_LENGTH - 3 : VERBOSE_FILENAME_LENGTH,
+			/* Truncate filename at beginning if it's too long */
 					truncate ? filename + strlen(filename) - VERBOSE_FILENAME_LENGTH + 3 : filename);
 		}
 	}
@@ -1098,6 +1098,87 @@ ReceiveAndUnpackTarFile(PGconn *conn, PGresult *res, int rownum)
 
 
 /*
+ * Escape a parameter value so that it can be used as part of a libpq
+ * connection string, e.g. in:
+ *
+ * application_name=<value>
+ *
+ * The returned string is malloc'd. Return NULL on out-of-memory.
+ */
+static char *
+escapeConnectionParameter(const char *src)
+{
+	bool		need_quotes = false;
+	bool		need_escaping = false;
+	const char *p;
+	char	   *dstbuf;
+	char	   *dst;
+
+	/*
+	 * First check if quoting is needed. Any quote (') or backslash (\)
+	 * characters need to be escaped. Parameters are separated by whitespace,
+	 * so any string containing whitespace characters need to be quoted. An
+	 * empty string is represented by ''.
+	 */
+	if (strchr(src, '\'') != NULL || strchr(src, '\\') != NULL)
+		need_escaping = true;
+
+	for (p = src; *p; p++)
+	{
+		if (isspace((unsigned char) *p))
+		{
+			need_quotes = true;
+			break;
+		}
+	}
+
+	if (*src == '\0')
+		return pg_strdup("''");
+
+	if (!need_quotes && !need_escaping)
+		return pg_strdup(src);	/* no quoting or escaping needed */
+
+	/*
+	 * Allocate a buffer large enough for the worst case that all the source
+	 * characters need to be escaped, plus quotes.
+	 */
+	dstbuf = pg_malloc(strlen(src) * 2 + 2 + 1);
+
+	dst = dstbuf;
+	if (need_quotes)
+		*(dst++) = '\'';
+	for (; *src; src++)
+	{
+		if (*src == '\'' || *src == '\\')
+			*(dst++) = '\\';
+		*(dst++) = *src;
+	}
+	if (need_quotes)
+		*(dst++) = '\'';
+	*dst = '\0';
+
+	return dstbuf;
+}
+
+/*
+ * Escape a string so that it can be used as a value in a key-value pair
+ * a configuration file.
+ */
+static char *
+escape_quotes(const char *src)
+{
+	char	   *result = escape_single_quotes_ascii(src);
+
+	if (!result)
+	{
+		fprintf(stderr, _("%s: out of memory\n"), progname);
+		exit(1);
+	}
+	return result;
+}
+
+
+/*
  * Write a standby.enabled file into the directory specified in basedir.
  */
 static void
@@ -1124,12 +1205,16 @@ BaseBackup(void)
 {
 	PGresult   *res;
 	char	   *sysidentifier;
+	uint32		latesttli;
 	uint32		starttli;
 	char		current_path[MAXPGPATH];
 	char		escaped_label[MAXPGPATH];
 	int			i;
 	char		xlogstart[64];
 	char		xlogend[64];
+	int			minServerMajor,
+				maxServerMajor;
+	int			serverMajor;
 
 	/*
 	 * Connect in replication mode to the server
@@ -1138,6 +1223,32 @@ BaseBackup(void)
 	if (!conn)
 		/* Error message already written in GetConnection() */
 		exit(1);
+
+	/*
+	 * Check server version. BASE_BACKUP command was introduced in 9.1, so we
+	 * can't work with servers older than 9.1.
+	 */
+	minServerMajor = 901;
+	maxServerMajor = PG_VERSION_NUM / 100;
+	serverMajor = PQserverVersion(conn) / 100;
+	if (serverMajor < minServerMajor || serverMajor > maxServerMajor)
+	{
+		const char *serverver = PQparameterStatus(conn, "server_version");
+
+		fprintf(stderr, _("%s: incompatible server version %s\n"),
+				progname, serverver ? serverver : "'unknown'");
+		disconnect_and_exit(1);
+	}
+
+	/*
+	 * If WAL streaming was requested, also check that the server is new
+	 * enough for that.
+	 */
+	if (streamwal && !CheckServerVersionForStreaming(conn))
+	{
+		/* Error message already written in CheckServerVersionForStreaming() */
+		disconnect_and_exit(1);
+	}
 
 	/*
 	 * Run IDENTIFY_SYSTEM so we can get the timeline
@@ -1157,6 +1268,7 @@ BaseBackup(void)
 		disconnect_and_exit(1);
 	}
 	sysidentifier = pg_strdup(PQgetvalue(res, 0, 0));
+	latesttli = atoi(PQgetvalue(res, 0, 1));
 	PQclear(res);
 
 	/*
@@ -1188,7 +1300,7 @@ BaseBackup(void)
 				progname, PQerrorMessage(conn));
 		disconnect_and_exit(1);
 	}
-	if (PQntuples(res) != 1 || PQnfields(res) < 2)
+	if (PQntuples(res) != 1)
 	{
 		fprintf(stderr,
 				_("%s: server returned unexpected response to BASE_BACKUP command; got %d rows and %d fields, expected %d rows and %d fields\n"),
@@ -1197,8 +1309,16 @@ BaseBackup(void)
 	}
 
 	strcpy(xlogstart, PQgetvalue(res, 0, 0));
-	starttli = atoi(PQgetvalue(res, 0, 1));
 
+	/*
+	 * 9.3 and later sends the TLI of the starting point. With older servers,
+	 * assume it's the same as the latest timeline reported by
+	 * IDENTIFY_SYSTEM.
+	 */
+	if (PQnfields(res) >= 2)
+		starttli = atoi(PQgetvalue(res, 0, 1));
+	else
+		starttli = latesttli;
 	PQclear(res);
 	MemSet(xlogend, 0, sizeof(xlogend));
 

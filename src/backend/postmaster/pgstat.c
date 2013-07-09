@@ -59,6 +59,7 @@
 #include "utils/memutils.h"
 #include "utils/ps_status.h"
 #include "utils/rel.h"
+#include "utils/snapmgr.h"
 #include "utils/timestamp.h"
 #include "utils/tqual.h"
 
@@ -1097,6 +1098,7 @@ pgstat_collect_oids(Oid catalogid)
 	Relation	rel;
 	HeapScanDesc scan;
 	HeapTuple	tup;
+	Snapshot	snapshot;
 
 	memset(&hash_ctl, 0, sizeof(hash_ctl));
 	hash_ctl.keysize = sizeof(Oid);
@@ -1109,7 +1111,8 @@ pgstat_collect_oids(Oid catalogid)
 					   HASH_ELEM | HASH_FUNCTION | HASH_CONTEXT);
 
 	rel = heap_open(catalogid, AccessShareLock);
-	scan = heap_beginscan(rel, SnapshotNow, 0, NULL);
+	snapshot = RegisterSnapshot(GetLatestSnapshot());
+	scan = heap_beginscan(rel, snapshot, 0, NULL);
 	while ((tup = heap_getnext(scan, ForwardScanDirection)) != NULL)
 	{
 		Oid			thisoid = HeapTupleGetOid(tup);
@@ -1119,6 +1122,7 @@ pgstat_collect_oids(Oid catalogid)
 		(void) hash_search(htab, (void *) &thisoid, HASH_ENTER, NULL);
 	}
 	heap_endscan(scan);
+	UnregisterSnapshot(snapshot);
 	heap_close(rel, AccessShareLock);
 
 	return htab;
@@ -2560,7 +2564,7 @@ pgstat_beshutdown_hook(int code, Datum arg)
  * pgstat_report_activity() -
  *
  *	Called from tcop/postgres.c to report what the backend is actually doing
- *	(usually "<IDLE>" or the start of the query to be executed).
+ *	(but note cmd_str can be NULL for certain cases).
  *
  * All updates of the status entry follow the protocol of bumping
  * st_changecount before and after.  We use a volatile pointer here to
@@ -2580,29 +2584,32 @@ pgstat_report_activity(BackendState state, const char *cmd_str)
 	if (!beentry)
 		return;
 
-	/*
-	 * To minimize the time spent modifying the entry, fetch all the needed
-	 * data first.
-	 */
-	current_timestamp = GetCurrentTimestamp();
-
-	if (!pgstat_track_activities && beentry->st_state != STATE_DISABLED)
+	if (!pgstat_track_activities)
 	{
-		/*
-		 * Track activities is disabled, but we have a non-disabled state set.
-		 * That means the status changed - so as our last update, tell the
-		 * collector that we disabled it and will no longer update.
-		 */
-		beentry->st_changecount++;
-		beentry->st_state = STATE_DISABLED;
-		beentry->st_state_start_timestamp = current_timestamp;
-		beentry->st_changecount++;
-		Assert((beentry->st_changecount & 1) == 0);
+		if (beentry->st_state != STATE_DISABLED)
+		{
+			/*
+			 * track_activities is disabled, but we last reported a
+			 * non-disabled state.	As our final update, change the state and
+			 * clear fields we will not be updating anymore.
+			 */
+			beentry->st_changecount++;
+			beentry->st_state = STATE_DISABLED;
+			beentry->st_state_start_timestamp = 0;
+			beentry->st_activity[0] = '\0';
+			beentry->st_activity_start_timestamp = 0;
+			/* st_xact_start_timestamp and st_waiting are also disabled */
+			beentry->st_xact_start_timestamp = 0;
+			beentry->st_waiting = false;
+			beentry->st_changecount++;
+			Assert((beentry->st_changecount & 1) == 0);
+		}
 		return;
 	}
 
 	/*
-	 * Fetch more data before we start modifying the entry
+	 * To minimize the time spent modifying the entry, fetch all the needed
+	 * data first.
 	 */
 	start_timestamp = GetCurrentStatementStartTimestamp();
 	if (cmd_str != NULL)
@@ -2610,6 +2617,7 @@ pgstat_report_activity(BackendState state, const char *cmd_str)
 		len = pg_mbcliplen(cmd_str, strlen(cmd_str),
 						   pgstat_track_activity_query_size - 1);
 	}
+	current_timestamp = GetCurrentTimestamp();
 
 	/*
 	 * Now update the status entry
@@ -4397,9 +4405,9 @@ pgstat_recv_inquiry(PgStat_MsgInquiry *msg, int len)
 	 * request's cutoff time, update it; otherwise there's nothing to do.
 	 *
 	 * Note that if a request is found, we return early and skip the below
-	 * check for clock skew.  This is okay, since the only way for a DB request
-	 * to be present in the list is that we have been here since the last write
-	 * round.
+	 * check for clock skew.  This is okay, since the only way for a DB
+	 * request to be present in the list is that we have been here since the
+	 * last write round.
 	 */
 	slist_foreach(iter, &last_statrequests)
 	{

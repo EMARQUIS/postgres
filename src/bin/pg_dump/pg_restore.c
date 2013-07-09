@@ -40,8 +40,9 @@
  */
 
 #include "pg_backup_archiver.h"
-
+#include "pg_backup_utils.h"
 #include "dumputils.h"
+#include "parallel.h"
 
 #include <ctype.h>
 
@@ -71,6 +72,7 @@ main(int argc, char **argv)
 	RestoreOptions *opts;
 	int			c;
 	int			exit_code;
+	int			numWorkers = 1;
 	Archive    *AH;
 	char	   *inputFileSpec;
 	static int	disable_triggers = 0;
@@ -182,7 +184,7 @@ main(int argc, char **argv)
 				break;
 
 			case 'j':			/* number of restore jobs */
-				opts->number_of_jobs = atoi(optarg);
+				numWorkers = atoi(optarg);
 				break;
 
 			case 'l':			/* Dump the TOC summary */
@@ -312,8 +314,22 @@ main(int argc, char **argv)
 		opts->useDB = 1;
 	}
 
+	if (opts->dataOnly && opts->schemaOnly)
+	{
+		fprintf(stderr, _("%s: options -s/--schema-only and -a/--data-only cannot be used together\n"),
+				progname);
+		exit_nicely(1);
+	}
+
+	if (opts->dataOnly && opts->dropSchema)
+	{
+		fprintf(stderr, _("%s: options -c/--clean and -a/--data-only cannot be used together\n"),
+				progname);
+		exit_nicely(1);
+	}
+
 	/* Can't do single-txn mode with multiple connections */
-	if (opts->single_txn && opts->number_of_jobs > 1)
+	if (opts->single_txn && numWorkers > 1)
 	{
 		fprintf(stderr, _("%s: cannot specify both --single-transaction and multiple jobs\n"),
 				progname);
@@ -371,6 +387,18 @@ main(int argc, char **argv)
 
 	if (opts->tocFile)
 		SortTocFromFile(AH, opts);
+
+	/* See comments in pg_dump.c */
+#ifdef WIN32
+	if (numWorkers > MAXIMUM_WAIT_OBJECTS)
+	{
+		fprintf(stderr, _("%s: maximum number of parallel jobs is %d\n"),
+				progname, MAXIMUM_WAIT_OBJECTS);
+		exit(1);
+	}
+#endif
+
+	AH->numWorkers = numWorkers;
 
 	if (opts->tocSummary)
 		PrintTOCSummary(AH, opts);

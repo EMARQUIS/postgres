@@ -285,7 +285,7 @@ readfile(const char *path)
 	int			i;
 	int			n;
 	int			len;
-	struct stat	statbuf;
+	struct stat statbuf;
 
 	/*
 	 * Slurp the file into memory.
@@ -344,8 +344,9 @@ readfile(const char *path)
 	{
 		if (buffer[i] == '\n')
 		{
-			int		slen = &buffer[i] - linebegin + 1;
-			char   *linebuf = pg_malloc(slen + 1);
+			int			slen = &buffer[i] - linebegin + 1;
+			char	   *linebuf = pg_malloc(slen + 1);
+
 			memcpy(linebuf, linebegin, slen);
 			linebuf[slen] = '\0';
 			result[n++] = linebuf;
@@ -1098,13 +1099,12 @@ do_promote(void)
 	}
 
 	/*
-	 * Use two different kinds of promotion file so we can understand
-	 * the difference between smart and fast promotion.
+	 * For 9.3 onwards, use fast promotion as the default option. Promotion
+	 * with a full checkpoint is still possible by writing a file called
+	 * "promote", e.g. snprintf(promote_file, MAXPGPATH, "%s/promote",
+	 * pg_data);
 	 */
-	if (shutdown_mode >= FAST_MODE)
-		snprintf(promote_file, MAXPGPATH, "%s/fast_promote", pg_data);
-	else
-		snprintf(promote_file, MAXPGPATH, "%s/promote", pg_data);
+	snprintf(promote_file, MAXPGPATH, "%s/fast_promote", pg_data);
 
 	if ((prmfile = fopen(promote_file, "w")) == NULL)
 	{
@@ -1205,8 +1205,7 @@ do_status(void)
 	/*
 	 * The Linux Standard Base Core Specification 3.1 says this should return
 	 * '3'
-	 * http://refspecs.freestandards.org/LSB_3.1.1/LSB-Core-generic/LSB-Core-ge
-	 * neric/iniscrptact.html
+	 * https://refspecs.linuxbase.org/LSB_3.1.0/LSB-Core-generic/LSB-Core-generic/iniscrptact.html
 	 */
 	exit(3);
 }
@@ -1769,7 +1768,7 @@ do_help(void)
 			 "                 [-o \"OPTIONS\"]\n"), progname);
 	printf(_("  %s reload  [-D DATADIR] [-s]\n"), progname);
 	printf(_("  %s status  [-D DATADIR]\n"), progname);
-	printf(_("  %s promote [-D DATADIR] [-s] [-m PROMOTION-MODE]\n"), progname);
+	printf(_("  %s promote [-D DATADIR] [-s]\n"), progname);
 	printf(_("  %s kill    SIGNALNAME PID\n"), progname);
 #if defined(WIN32) || defined(__CYGWIN__)
 	printf(_("  %s register   [-N SERVICENAME] [-U USERNAME] [-P PASSWORD] [-D DATADIR]\n"
@@ -1805,10 +1804,6 @@ do_help(void)
 	printf(_("  smart       quit after all clients have disconnected\n"));
 	printf(_("  fast        quit directly, with proper shutdown\n"));
 	printf(_("  immediate   quit without complete shutdown; will lead to recovery on restart\n"));
-
-	printf(_("\nPromotion modes are:\n"));
-	printf(_("  smart       promote after performing a checkpoint\n"));
-	printf(_("  fast        promote quickly without waiting for checkpoint completion\n"));
 
 	printf(_("\nAllowed signal names for kill:\n"));
 	printf("  ABRT HUP INT QUIT TERM USR1 USR2\n");
@@ -2006,13 +2001,12 @@ main(int argc, char **argv)
 	/* support --help and --version even if invoked as root */
 	if (argc > 1)
 	{
-		if (strcmp(argv[1], "-h") == 0 || strcmp(argv[1], "--help") == 0 ||
-			strcmp(argv[1], "-?") == 0)
+		if (strcmp(argv[1], "--help") == 0 || strcmp(argv[1], "-?") == 0)
 		{
 			do_help();
 			exit(0);
 		}
-		else if (strcmp(argv[1], "-V") == 0 || strcmp(argv[1], "--version") == 0)
+		else if (strcmp(argv[1], "--version") == 0 || strcmp(argv[1], "-V") == 0)
 		{
 			puts("pg_ctl (PostgreSQL) " PG_VERSION);
 			exit(0);
