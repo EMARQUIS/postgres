@@ -186,6 +186,7 @@ DisableWalRcvImmediateExit(void)
 void
 WalReceiverMain(void)
 {
+	char		conninfo[MAXCONNINFO];
 	XLogRecPtr	startpoint;
 	TimeLineID	startpointTLI;
 	TimeLineID	primaryTLI;
@@ -239,6 +240,7 @@ WalReceiverMain(void)
 	walrcv->walRcvState = WALRCV_STREAMING;
 
 	/* Fetch information required to start streaming */
+	strlcpy(conninfo, (char *) walrcv->conninfo, MAXCONNINFO);
 	startpoint = walrcv->receiveStart;
 	startpointTLI = walrcv->receiveStartTLI;
 
@@ -305,7 +307,7 @@ WalReceiverMain(void)
 
 	/* Establish the connection to the primary for XLOG streaming */
 	EnableWalRcvImmediateExit();
-	walrcv_connect(primary_conninfo);
+	walrcv_connect(conninfo);
 	DisableWalRcvImmediateExit();
 
 	first_stream = true;
@@ -405,22 +407,8 @@ WalReceiverMain(void)
 
 				if (got_SIGHUP)
 				{
-					char    *conninfo = pstrdup(primary_conninfo);
-
 					got_SIGHUP = false;
 					ProcessConfigFile(PGC_SIGHUP);
-
-					/*
-					 * If primary_conninfo has been changed while walreceiver is running,
-					 * shut down walreceiver so that new walreceiver is started and
-					 * it initiates replication with new primary_conninfo.
-					 */
-					if (strcmp(conninfo, primary_conninfo) != 0)
-						ereport(FATAL,
-								(errcode(ERRCODE_ADMIN_SHUTDOWN),
-								 errmsg("terminating walreceiver process because primary_conninfo was changed")));
-					pfree(conninfo);
-
 					XLogWalRcvSendHSFeedback(true);
 				}
 

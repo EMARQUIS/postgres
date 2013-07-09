@@ -219,10 +219,11 @@ ShutdownWalRcv(void)
 /*
  * Request postmaster to start walreceiver.
  *
- * recptr indicates the position where streaming should begin.
+ * recptr indicates the position where streaming should begin, and conninfo
+ * is a libpq connection string to use.
  */
 void
-RequestXLogStreaming(TimeLineID tli, XLogRecPtr recptr)
+RequestXLogStreaming(TimeLineID tli, XLogRecPtr recptr, const char *conninfo)
 {
 	/* use volatile pointer to prevent code rearrangement */
 	volatile WalRcvData *walrcv = WalRcv;
@@ -243,6 +244,11 @@ RequestXLogStreaming(TimeLineID tli, XLogRecPtr recptr)
 	/* It better be stopped if we try to restart it */
 	Assert(walrcv->walRcvState == WALRCV_STOPPED ||
 		   walrcv->walRcvState == WALRCV_WAITING);
+
+	if (conninfo != NULL)
+		strlcpy((char *) walrcv->conninfo, conninfo, MAXCONNINFO);
+	else
+		walrcv->conninfo[0] = '\0';
 
 	if (walrcv->walRcvState == WALRCV_STOPPED)
 	{

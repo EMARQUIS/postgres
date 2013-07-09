@@ -230,7 +230,6 @@ static bool restoredFromArchive = false;
 static bool fast_promote = false;
 
 /* if recoveryStopsHere returns true, it saves actual stop xid/time/name here */
-static RecoveryTargetType recoveryStopTarget;
 static TransactionId recoveryStopXid;
 static TimestampTz recoveryStopTime;
 static char recoveryStopName[MAXFNAMELEN];
@@ -5577,7 +5576,6 @@ recoveryStopsHere(XLogRecord *record, bool *includeThis)
 
 	if (stopsHere)
 	{
-		recoveryStopTarget = recovery_target;
 		recoveryStopXid = record->xl_xid;
 		recoveryStopTime = recordXtime;
 		recoveryStopAfter = *includeThis;
@@ -7866,10 +7864,6 @@ CreateCheckPoint(int flags)
 	if ((flags & (CHECKPOINT_IS_SHUTDOWN | CHECKPOINT_END_OF_RECOVERY |
 				  CHECKPOINT_FORCE)) == 0)
 	{
-		XLogRecPtr	curInsert;
-
-		INSERT_RECPTR(curInsert, Insert, Insert->curridx);
-
 		if (curInsert == ControlFile->checkPoint +
 			MAXALIGN(SizeOfXLogRecord + sizeof(CheckPoint)) &&
 			ControlFile->checkPoint == ControlFile->checkPointCopy.redo)
@@ -10633,7 +10627,7 @@ WaitForWALToBecomeAvailable(XLogRecPtr RecPtr, bool randAccess,
 									 tli, curFileTLI);
 						}
 						curFileTLI = tli;
-						RequestXLogStreaming(tli, ptr, PrimaryConnInfo);
+						RequestXLogStreaming(tli, ptr, primary_conninfo);
 						receivedUpto = 0;
 					}
 

@@ -2631,7 +2631,7 @@ static struct config_real ConfigureNamesReal[] =
 static struct config_string ConfigureNamesString[] =
 {
 	{
-		{"archive_command", PGC_SIGHUP, WAL_ARCHIVING,
+		{"archive_command", PGC_POSTMASTER, WAL_ARCHIVING,
 			gettext_noop("Sets the shell command that will be called to archive a WAL file."),
 			NULL
 		},
@@ -2641,7 +2641,7 @@ static struct config_string ConfigureNamesString[] =
 	},
 
 	{
-		{"restore_command", PGC_SIGHUP, WAL_ARCHIVE_RECOVERY,
+		{"restore_command", PGC_POSTMASTER, WAL_ARCHIVE_RECOVERY,
 			gettext_noop("Sets the shell command that will retrieve an archived WAL file."),
 			NULL
 		},
@@ -2651,7 +2651,7 @@ static struct config_string ConfigureNamesString[] =
 	},
 
 	{
-		{"archive_cleanup_command", PGC_SIGHUP, WAL_ARCHIVE_RECOVERY,
+		{"archive_cleanup_command", PGC_POSTMASTER, WAL_ARCHIVE_RECOVERY,
 			gettext_noop("Sets the shell command that will be executed at every restartpoint."),
 			NULL
 		},
@@ -2661,7 +2661,7 @@ static struct config_string ConfigureNamesString[] =
 	},
 
 	{
-		{"recovery_end_command", PGC_SIGHUP, WAL_ARCHIVE_RECOVERY,
+		{"recovery_end_command", PGC_POSTMASTER, WAL_ARCHIVE_RECOVERY,
 			gettext_noop("Sets the shell command that will be executed once only at the end of recovery."),
 			NULL
 		},
@@ -2671,7 +2671,7 @@ static struct config_string ConfigureNamesString[] =
 	},
 
 	{
-		{"recovery_target_xid", PGC_SIGHUP, WAL_RECOVERY_TARGET,
+		{"recovery_target_xid", PGC_POSTMASTER, WAL_RECOVERY_TARGET,
 			gettext_noop("Sets the transaction ID up to which recovery will proceed."),
 			NULL
 		},
@@ -2681,7 +2681,7 @@ static struct config_string ConfigureNamesString[] =
 	},
 
 	{
-		{"recovery_target_name", PGC_SIGHUP, WAL_RECOVERY_TARGET,
+		{"recovery_target_name", PGC_POSTMASTER, WAL_RECOVERY_TARGET,
 			gettext_noop("Sets the named restore point."),
 			NULL
 		},
@@ -2691,7 +2691,7 @@ static struct config_string ConfigureNamesString[] =
 	},
 
 	{
-		{"recovery_target_time", PGC_SIGHUP, WAL_RECOVERY_TARGET,
+		{"recovery_target_time", PGC_POSTMASTER, WAL_RECOVERY_TARGET,
 			gettext_noop("Sets the time stamp up to which recovery will proceed."),
 			NULL
 		},
@@ -2711,7 +2711,7 @@ static struct config_string ConfigureNamesString[] =
 	},
 
 	{
-		{"primary_conninfo", PGC_SIGHUP, REPLICATION_STANDBY,
+		{"primary_conninfo", PGC_POSTMASTER, REPLICATION_STANDBY,
 			gettext_noop("Sets the connection string to be used to connect with the primary."),
 			NULL,
 			GUC_SUPERUSER_ONLY
@@ -2722,7 +2722,7 @@ static struct config_string ConfigureNamesString[] =
 	},
 
 	{
-		{"trigger_file", PGC_SIGHUP, REPLICATION_STANDBY,
+		{"trigger_file", PGC_POSTMASTER, REPLICATION_STANDBY,
 			gettext_noop("Sets the trigger file whose presence ends recovery in the standby."),
 			NULL
 		},
