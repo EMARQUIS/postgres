@@ -818,17 +818,25 @@ ReindexRelationConcurrently(Oid relationOid)
 				 * In the case of a relation, find all its indexes
 				 * including toast indexes.
 				 */
-				Relation	heapRelation = heap_open(relationOid,
-													ShareUpdateExclusiveLock);
+				Relation	heapRelation;
 
 				/* Track this relation for session locks */
 				parentRelationIds = lappend_oid(parentRelationIds, relationOid);
 
-				/* Relation on which is based index cannot be shared */
-				if (heapRelation->rd_rel->relisshared)
+				/* A shared relation cannot be reindexed concurrently */
+				if (IsSharedRelation(relationOid))
 					ereport(ERROR,
 							(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 							 errmsg("concurrent reindex is not supported for shared relations")));
+
+				/* A system catalog cannot be reindexed concurrently */
+				if (IsSystemNamespace(get_rel_namespace(relationOid)))
+					ereport(ERROR,
+							(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							 errmsg("concurrent reindex is not supported for catalog relations")));
+
+				/* Open relation to get its indexes */
+				heapRelation = heap_open(relationOid, ShareUpdateExclusiveLock);
 
 				/* Add all the valid indexes of relation to list */
 				foreach(lc2, RelationGetIndexList(heapRelation))
