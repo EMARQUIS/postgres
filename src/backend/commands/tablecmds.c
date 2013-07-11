@@ -874,6 +874,7 @@ RangeVarCallbackForDropRelation(const RangeVar *rel, Oid relOid, Oid oldRelOid,
 	char		relkind;
 	Form_pg_class classform;
 	LOCKMODE	heap_lockmode;
+	bool		invalid_system_index = false;
 
 	state = (struct DropRelationCallbackState *) arg;
 	relkind = state->relkind;
@@ -903,6 +904,12 @@ RangeVarCallbackForDropRelation(const RangeVar *rel, Oid relOid, Oid oldRelOid,
 	if (classform->relkind != relkind)
 		DropErrorMsgWrongType(rel->relname, classform->relkind, relkind);
 
+	/* Allow DROP to either table owner or schema owner */
+	if (!pg_class_ownercheck(relOid, GetUserId()) &&
+		!pg_namespace_ownercheck(classform->relnamespace, GetUserId()))
+		aclcheck_error(ACLCHECK_NOT_OWNER, ACL_KIND_CLASS,
+					   rel->relname);
+
 	/*
 	 * Check the case of a system index that might have been invalidated by a
 	 * failed concurrent process and allow its drop. For the time being, this
@@ -916,7 +923,7 @@ RangeVarCallbackForDropRelation(const RangeVar *rel, Oid relOid, Oid oldRelOid,
 		Form_pg_index	indexform;
 		bool			indisvalid;
 
-		locTuple = SearchSysCache1(INDEXRELID, ObjectIdGetDatum(state->heapOid));
+		locTuple = SearchSysCache1(INDEXRELID, ObjectIdGetDatum(relOid));
 		if (!HeapTupleIsValid(locTuple))
 		{
 			ReleaseSysCache(tuple);
@@ -927,21 +934,13 @@ RangeVarCallbackForDropRelation(const RangeVar *rel, Oid relOid, Oid oldRelOid,
 		indisvalid = indexform->indisvalid;
 		ReleaseSysCache(locTuple);
 
-		/* Leave if index entry is not valid */
+		/* Mark object as being an invalid index of system catalogs */
 		if (!indisvalid)
-		{
-			ReleaseSysCache(tuple);
-			return;
-		}
+			invalid_system_index = true;
 	}
 
-	/* Allow DROP to either table owner or schema owner */
-	if (!pg_class_ownercheck(relOid, GetUserId()) &&
-		!pg_namespace_ownercheck(classform->relnamespace, GetUserId()))
-		aclcheck_error(ACLCHECK_NOT_OWNER, ACL_KIND_CLASS,
-					   rel->relname);
-
-	if (!allowSystemTableMods && IsSystemClass(classform))
+	/* In the case of an invalid index, it is fine to bypass this check */
+	if (!invalid_system_index && !allowSystemTableMods && IsSystemClass(classform))
 		ereport(ERROR,
 				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
 				 errmsg("permission denied: \"%s\" is a system catalog",
